@@ -13,6 +13,7 @@ import {
   Plasmid,
   Primer,
 } from '@/domain/types';
+import type { PlasmidReadiness } from '@/services/data-quality.service';
 
 export interface PlasmidListResult {
   data: Plasmid[];
@@ -353,4 +354,12 @@ export async function deleteGenbank(plasmidId: string): Promise<void> {
 /** Browser navigation to this URL downloads the GenBank file */
 export function genbankDownloadUrl(plasmidId: string): string {
   return `/api/plasmids/${encodeURIComponent(plasmidId)}/genbank?download=1`;
+}
+
+// --- Formblatt-Z readiness ---
+
+/** One readiness entry per plasmid (row-level indicator) */
+export async function fetchPlasmidReadiness(): Promise<PlasmidReadiness[]> {
+  const response = await fetch('/api/plasmids/readiness');
+  return unwrap<PlasmidReadiness[]>(response);
 }

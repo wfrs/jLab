@@ -61,6 +61,23 @@ interface PlasmidRow {
   backboneVector: string | null;
 }
 
+/**
+ * Per-plasmid Formblatt-Z readiness (locked UX requirement: row-level
+ * readiness indicator).
+ *
+ * blocked    — this plasmid's data is why generation is refused
+ * incomplete — generation runs, but the plasmid is absent or has gaps
+ * ready      — contributes complete rows
+ */
+export type ReadinessLevel = 'ready' | 'incomplete' | 'blocked';
+
+export interface PlasmidReadiness {
+  plasmidId: string;
+  level: ReadinessLevel;
+  /** Why it is not ready, blocking reasons first; empty when ready */
+  reasons: string[];
+}
+
 interface CassetteRow {
   name: string;
   plasmidId: string;
@@ -257,5 +274,106 @@ export class DataQualityService {
     });
 
     return report;
+  }
+
+  /**
+   * Formblatt-Z readiness for every plasmid, one entry per plasmid.
+   *
+   * Same rules as the global report, attributed per record: a plasmid is
+   * `blocked` when its own data is what the export gate rejects, and
+   * `incomplete` when generation would succeed but the plasmid contributes
+   * nothing (no GMO rows) or leaves report cells blank.
+   */
+  async plasmidReadiness(): Promise<PlasmidReadiness[]> {
+    this.logger.info('DataQualityService.plasmidReadiness');
+
+    const db = getQueryBuilder();
+    const [plasmids, cassettes, features, organisms, gmos] = await Promise.all([
+      db('plasmids').select('id', 'name', 'backboneVector') as Promise<PlasmidRow[]>,
+      db('cassettes').select('name', 'plasmidId') as Promise<CassetteRow[]>,
+      db('glossary_features').select('annotation', 'organism') as Promise<GlossaryFeature[]>,
+      db('organisms').select('fullName', 'shortName') as Promise<Organism[]>,
+      db('gmos').select('plasmidId', 'organismName') as Promise<
+        { plasmidId: string; organismName: string }[]
+      >,
+    ]);
+
+    const featureOrganism = new Map(features.map((f) => [f.annotation, f.organism ?? null]));
+    // Features and GMOs may name an organism by short OR full name
+    const organismNames = new Set<string>();
+    for (const organism of organisms) {
+      organismNames.add(organism.fullName);
+      if (!isBlank(organism.shortName)) {
+        organismNames.add(organism.shortName as string);
+      }
+    }
+
+    const cassettesByPlasmid = new Map<string, string[]>();
+    for (const cassette of cassettes) {
+      const list = cassettesByPlasmid.get(cassette.plasmidId);
+      if (list) {
+        list.push(cassette.name);
+      } else {
+        cassettesByPlasmid.set(cassette.plasmidId, [cassette.name]);
+      }
+    }
+
+    const gmoOrganismsByPlasmid = new Map<string, string[]>();
+    for (const gmo of gmos) {
+      const list = gmoOrganismsByPlasmid.get(gmo.plasmidId);
+      if (list) {
+        list.push(gmo.organismName);
+      } else {
+        gmoOrganismsByPlasmid.set(gmo.plasmidId, [gmo.organismName]);
+      }
+    }
+
+    return plasmids.map((plasmid) => {
+      const blocking = new Set<string>();
+      const incomplete: string[] = [];
+
+      const plasmidCassettes = cassettesByPlasmid.get(plasmid.id) ?? [];
+      for (const content of plasmidCassettes) {
+        for (const token of cassetteBaseTokens(content)) {
+          if (!featureOrganism.has(token)) {
+            blocking.add(`Cassette token not in glossary: ${token}`);
+            continue;
+          }
+          const organism = featureOrganism.get(token) ?? null;
+          if (isBlank(organism)) {
+            blocking.add(`Feature ${token} has no organism set`);
+          } else if (!organismNames.has(organism as string)) {
+            blocking.add(`Organism not in glossary: ${organism} (feature ${token})`);
+          }
+        }
+      }
+
+      const plasmidGmoOrganisms = gmoOrganismsByPlasmid.get(plasmid.id) ?? [];
+      for (const organismName of plasmidGmoOrganisms) {
+        if (!organismNames.has(organismName)) {
+          blocking.add(`GMO organism not in glossary: ${organismName}`);
+        }
+      }
+
+      if (plasmidCassettes.length === 0) {
+        incomplete.push('No cassettes — contributes no nucleic acids or donor organisms');
+      }
+      if (plasmidGmoOrganisms.length === 0) {
+        incomplete.push('No GMO records — will not appear in Formblatt-Z');
+      }
+      if (isBlank(plasmid.backboneVector)) {
+        incomplete.push('No original vector (Ausgangsvektor)');
+      }
+
+      const blockingReasons = [...blocking];
+      const level: ReadinessLevel =
+        blockingReasons.length > 0 ? 'blocked' : incomplete.length > 0 ? 'incomplete' : 'ready';
+
+      return {
+        plasmidId: plasmid.id,
+        level,
+        reasons: [...blockingReasons, ...incomplete],
+      };
+    });
   }
 }

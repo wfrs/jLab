@@ -60,9 +60,9 @@ v2 surfaces all of them, graded by severity:
 
 ## Verification results
 
-- 311/311 Jest tests passing (15 new in `tests/integration/data-quality.test.ts`:
-  clean-database and empty-database baselines, one per check, two API-route
-  cases, and a gate-consistency assertion)
+- 318/318 Jest tests passing (22 new in `tests/integration/data-quality.test.ts`:
+  clean-database and empty-database baselines, one per check, API-route cases,
+  gate-consistency assertions, and seven covering per-plasmid readiness)
 - `tsc --noEmit` clean; ESLint clean; Prettier applied
 - **Live against the real 244-plasmid database:** `ok: true`, 5 of 10 checks
   clean, correctly finding 4 plasmids without an original vector, 4 without
@@ -83,9 +83,38 @@ v2 surfaces all of them, graded by severity:
 - Regression path: full suite 311/311; export gate unchanged
 - Compatibility path: n/a (read-only feature, no schema change)
 
-## Follow-up
+## Row-level readiness indicator (locked UX requirement, shipped 2026-08-29)
 
-The per-plasmid subset of this computation is what the still-unfulfilled
-locked UX requirement "row-level Formblatt-Z readiness indicator"
-(`docs/architecture/ui-ux-direction.md`) needs. That is the natural next
-change and should reuse `DataQualityService` rather than recompute.
+`docs/architecture/ui-ux-direction.md` lists a "row-level Formblatt-Z
+readiness indicator" among the locked cassette/insert UX requirements. It was
+deferred at the glossary milestone (see `glossary-and-token-editor.md`)
+because it needed the GMO and report layers. Both now exist, and the
+computation is the per-plasmid subset of the checks above, so it is
+implemented in the same service rather than recomputed:
+
+- `DataQualityService.plasmidReadiness()` returns one entry per plasmid with
+  a level and human-readable reasons.
+- `blocked` — this plasmid's own data is what the export gate rejects
+  (cassette token not in the glossary, feature with no/unresolvable organism,
+  GMO organism not in the glossary). Reasons are deduplicated, so a token
+  repeated across cassettes is reported once.
+- `incomplete` — generation succeeds, but the plasmid has no cassettes, no
+  GMO records (so it never appears in Formblatt-Z), or no original vector.
+- `ready` — contributes complete rows.
+- `GET /api/plasmids/readiness`; rendered by `PlasmidReadinessCell` as a
+  "Formblatt Z" column: a severity dot plus a short label, with the reasons
+  as a tooltip and in the accessible name.
+
+Consistency with the gate is asserted by test: if any plasmid is `blocked`,
+the global report's `ok` is false.
+
+Per the locked UX direction the indicator is a **soft** signal — the row stays
+editable and saveable, and nothing is blocked at the row level. Readiness is
+refreshed on mount, after create/duplicate/delete, and when the detail panel
+closes (cassettes, GMOs and the original vector are all panel-edited); plain
+table edits cannot change readiness, so they do not trigger a refetch.
+
+**Route note:** `/api/plasmids/readiness` is a static segment that sits
+alongside the dynamic `/api/plasmids/[id]`. Next.js gives static segments
+precedence; verified live that `/api/plasmids/<uuid>` still returns 200 and an
+unknown id still returns 404.

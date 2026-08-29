@@ -30,18 +30,18 @@
 - GMOCU v1 database import (legacy import_data): ImportService + POST /api/import (dryRun inspection, selective import) + ImportSection card on /settings; imports plasmids (status/description/backboneVector mapping), cassettes, GMOs, attachments (BLOBs), GenBank (normalized into genbank_files), and backfills missing glossary features/organisms from the source; single transaction; handles pre-0.5 sources without uid columns; verified live against gmocu/example v0.4 + v0.7 databases
 - Linear design language adopted app-wide (2026-08-29): design system installed at .claude/skills/design-taste-frontend/references/linear-design-system.md; gray/blue Tailwind scales remapped to Linear's canvas/surface ladder (#010102 → #0f1011 → #141516 → #18191a) and single lavender accent (#5e6ad2), Inter via next/font, hairline borders, no dark shadows (elevation = surface steps + panel-lift top-edge highlight), quiet tinted status badges, surface-3 floating overlays; styling only — no behavior changes, all 296 tests still pass
 - Data quality checks (legacy check_plasmids/check_features/check_organisms): DataQualityService with 10 graded checks (error = blocks Formblatt-Z, warning = record incomplete, info = housekeeping), GET /api/health, "Data quality" card on /reports with per-check itemized findings; the two error checks delegate to ReportService.checkGlossaryIntegrity so the card and the export gate cannot disagree. Legacy computed the check_plasmids lists and the redundant/duplicate lists but discarded them at every call site — v2 surfaces them
-- 311 tests passing (unit + integration incl. API route tests via tests/helpers/test-db.ts)
+- Row-level Formblatt-Z readiness indicator (closes the last open locked UX requirement from ui-ux-direction.md): DataQualityService.plasmidReadiness returns ready/incomplete/blocked per plasmid with deduplicated reasons, GET /api/plasmids/readiness, "Formblatt Z" column in the plasmid table (dot + label, reasons as tooltip and accessible name); soft signal — rows stay editable; refreshed on mount, create/duplicate/delete, and detail-panel close
+- 318 tests passing (unit + integration incl. API route tests via tests/helpers/test-db.ts)
 - Parity evidence: docs/plans/parity-evidence/ (plasmid-editable-table-autosave.md, cassette-layer.md, glossary-and-token-editor.md, organisms-and-gmos.md, formblatt-z-reports.md, rename-propagation.md, settings.md, attachments-genbank.md, plasmid-duplication.md, primers-features.md, table-ux-clipboard-keyboard.md, db-import.md)
 
 **Next candidates** (checked against docs/legacy-analysis/feature-inventory.md — the earlier list omitted three real parity gaps):
 
 _Local, testable without credentials:_
 
-1. Row-level Formblatt-Z readiness indicator — a locked UX requirement (docs/architecture/ui-ux-direction.md) still unfulfilled; it is the per-plasmid subset of DataQualityService and should reuse it
-2. Glossary Excel import/export (inventory §5) — template-based import, export all/used-only; exceljs already a dependency
-3. Target + favourite organism lists (inventory §6) — also unlocks batch-add GMOs from favourites (inventory §3 gap)
-4. Bulk-create-on-paste (rows below the table); glossary tables adopting the grid navigation
-5. DB backup/export (complement to import; legacy offered a backup before importing)
+1. Glossary Excel import/export (inventory §5) — template-based import, export all/used-only; exceljs already a dependency
+2. Target + favourite organism lists (inventory §6) — also unlocks batch-add GMOs from favourites (inventory §3 gap)
+3. Bulk-create-on-paste (rows below the table); glossary tables adopting the grid navigation
+4. DB backup/export (complement to import; legacy offered a backup before importing)
 
 _Needs external credentials, so it cannot be verified autonomously:_
 

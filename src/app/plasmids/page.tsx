@@ -20,10 +20,13 @@ import {
   createPlasmid,
   deletePlasmid,
   duplicatePlasmid,
+  fetchPlasmidReadiness,
   listPlasmids,
   updatePlasmid,
   UpdatePlasmidPayload,
 } from '@/components/plasmids/api-client';
+import { PlasmidReadinessCell } from '@/components/plasmids/PlasmidReadinessCell';
+import type { PlasmidReadiness } from '@/services/data-quality.service';
 
 /** Debounce for the search box (ms) */
 const SEARCH_DEBOUNCE_MS = 300;
@@ -54,6 +57,23 @@ export default function PlasmidsPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [readiness, setReadiness] = useState<Map<string, PlasmidReadiness>>(new Map());
+
+  /**
+   * Formblatt-Z readiness per row. Refreshed on mount and whenever an edit
+   * that can change it lands (cassettes, GMOs and the original vector are
+   * all edited in the detail panel, so closing it is the trigger); plain
+   * table edits (name/description/size/status) cannot affect readiness.
+   */
+  const refreshReadiness = useCallback(async () => {
+    try {
+      const entries = await fetchPlasmidReadiness();
+      setReadiness(new Map(entries.map((entry) => [entry.plasmidId, entry])));
+    } catch {
+      // Readiness is advisory — a failure must not break the table
+      setReadiness(new Map());
+    }
+  }, []);
 
   // Fetch plasmids from API (debounced on search)
   useEffect(() => {
@@ -73,6 +93,10 @@ export default function PlasmidsPage() {
     const timer = setTimeout(fetchPlasmids, SEARCH_DEBOUNCE_MS);
     return () => clearTimeout(timer);
   }, [searchQuery]);
+
+  useEffect(() => {
+    void refreshReadiness();
+  }, [refreshReadiness]);
 
   /**
    * Autosave: PATCH one or more fields, then sync the row with the server
@@ -107,6 +131,7 @@ export default function PlasmidsPage() {
       });
 
       setPlasmids((prev) => [created, ...prev]);
+      void refreshReadiness();
       setActiveId(created.id);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create plasmid');
@@ -216,6 +241,7 @@ export default function PlasmidsPage() {
       setError(null);
       const copy = await duplicatePlasmid(id);
       setPlasmids((prev) => [copy, ...prev]);
+      void refreshReadiness();
       setActiveId(copy.id);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to duplicate plasmid');
@@ -253,6 +279,7 @@ export default function PlasmidsPage() {
     if (failures.length > 0) {
       setError(failures.join('; '));
     }
+    void refreshReadiness();
     setIsDeleting(false);
   };
 
@@ -357,6 +384,15 @@ export default function PlasmidsPage() {
       sortable: true,
       width: '130px',
       render: (plasmid) => new Date(plasmid.createdAt).toLocaleDateString(),
+    },
+    {
+      id: 'readiness',
+      label: 'Formblatt Z',
+      sortable: false,
+      width: '120px',
+      render: (plasmid) => (
+        <PlasmidReadinessCell readiness={readiness.get(plasmid.id)} plasmidName={plasmid.name} />
+      ),
     },
   ];
 
@@ -484,7 +520,12 @@ export default function PlasmidsPage() {
           plasmid={activePlasmid}
           onSave={(patch) => saveField(activePlasmid.id, patch)}
           onDuplicate={() => handleDuplicate(activePlasmid.id)}
-          onClose={() => setActiveId(null)}
+          onClose={() => {
+            setActiveId(null);
+            // Cassettes, GMOs and the original vector are panel-edited and
+            // all feed readiness, so recompute when the panel closes
+            void refreshReadiness();
+          }}
         />
       )}
     </div>

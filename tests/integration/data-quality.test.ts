@@ -322,6 +322,129 @@ describe('Data quality checks (Integration)', () => {
     });
   });
 
+  describe('plasmidReadiness (row-level Formblatt-Z indicator)', () => {
+    const levelOf = (
+      entries: Awaited<ReturnType<DataQualityService['plasmidReadiness']>>,
+      id: string
+    ) => entries.find((e) => e.plasmidId === id);
+
+    it('marks a complete plasmid ready with no reasons', async () => {
+      const plasmidId = await seedCleanDatabase();
+
+      const entries = await service.plasmidReadiness();
+
+      expect(entries).toHaveLength(1);
+      expect(levelOf(entries, plasmidId)).toEqual({
+        plasmidId,
+        level: 'ready',
+        reasons: [],
+      });
+    });
+
+    it('blocks the plasmid whose cassette token is unknown', async () => {
+      const cleanId = await seedCleanDatabase();
+      const brokenId = await addPlasmid('pBroken');
+      await addCassette(brokenId, 'pLac-GHOST');
+      await addGmo(brokenId, 'Escherichia coli');
+
+      const entries = await service.plasmidReadiness();
+
+      expect(levelOf(entries, brokenId)?.level).toBe('blocked');
+      expect(levelOf(entries, brokenId)?.reasons).toContain(
+        'Cassette token not in glossary: GHOST'
+      );
+      // The healthy plasmid is unaffected by its neighbour
+      expect(levelOf(entries, cleanId)?.level).toBe('ready');
+    });
+
+    it('blocks on an unresolvable GMO organism and on a feature organism', async () => {
+      await seedCleanDatabase();
+      const gmoId = await addPlasmid('pBadGmo');
+      await addCassette(gmoId, 'pLac');
+      await addGmo(gmoId, 'Bacillus subtilis');
+
+      await addFeature('orphanFeat', { organism: 'Nonexistent organism' });
+      const featId = await addPlasmid('pBadFeature');
+      await addCassette(featId, 'orphanFeat');
+      await addGmo(featId, 'Escherichia coli');
+
+      const entries = await service.plasmidReadiness();
+
+      expect(levelOf(entries, gmoId)?.reasons).toContain(
+        'GMO organism not in glossary: Bacillus subtilis'
+      );
+      expect(levelOf(entries, featId)?.reasons).toContain(
+        'Organism not in glossary: Nonexistent organism (feature orphanFeat)'
+      );
+    });
+
+    it('marks plasmids incomplete for missing cassettes, GMOs, or original vector', async () => {
+      await seedCleanDatabase();
+      const bareId = await addPlasmid('pBare', { backboneVector: null });
+
+      const entries = await service.plasmidReadiness();
+      const bare = levelOf(entries, bareId);
+
+      expect(bare?.level).toBe('incomplete');
+      expect(bare?.reasons).toEqual([
+        'No cassettes — contributes no nucleic acids or donor organisms',
+        'No GMO records — will not appear in Formblatt-Z',
+        'No original vector (Ausgangsvektor)',
+      ]);
+    });
+
+    it('reports blocking reasons before incomplete ones, deduplicated', async () => {
+      await seedCleanDatabase();
+      const id = await addPlasmid('pBoth', { backboneVector: null });
+      // Same unknown token twice — one reason, not two
+      await addCassette(id, 'GHOST');
+      await addCassette(id, 'GHOST-pLac');
+
+      const entries = await service.plasmidReadiness();
+      const entry = levelOf(entries, id);
+
+      expect(entry?.level).toBe('blocked');
+      expect(entry?.reasons).toEqual([
+        'Cassette token not in glossary: GHOST',
+        'No GMO records — will not appear in Formblatt-Z',
+        'No original vector (Ausgangsvektor)',
+      ]);
+    });
+
+    it('agrees with the global gate: any blocked plasmid means ok is false', async () => {
+      await seedCleanDatabase();
+      const id = await addPlasmid('pGate');
+      await addCassette(id, 'MISSING_TOKEN');
+      await addGmo(id, 'Escherichia coli');
+
+      const [entries, report] = await Promise.all([
+        service.plasmidReadiness(),
+        service.runChecks(),
+      ]);
+
+      expect(entries.some((e) => e.level === 'blocked')).toBe(true);
+      expect(report.ok).toBe(false);
+    });
+
+    it('GET /api/plasmids/readiness returns one entry per plasmid', async () => {
+      await seedCleanDatabase();
+      await addPlasmid('pSecond');
+
+      const readinessRoute = await import('@app/api/plasmids/readiness/route');
+      const response = await readinessRoute.GET(
+        asNextRequest(new Request('http://localhost/api/plasmids/readiness'))
+      );
+      const json = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(json.data).toHaveLength(2);
+      expect(json.data.map((e: { level: string }) => e.level).sort()).toEqual([
+        'incomplete',
+        'ready',
+      ]);
+    });
+  });
+
   describe('consistency with the export gate', () => {
     it('ok matches the ReportService glossary integrity gate', async () => {
       await seedCleanDatabase();
