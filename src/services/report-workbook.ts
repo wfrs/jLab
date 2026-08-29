@@ -83,11 +83,13 @@ function addFormattedSheet(
   headers: string[],
   widths: number[],
   rows: string[][],
-  footer: string
+  footer: string,
+  /** Reports print landscape; the glossary lists print portrait (legacy set_portrait) */
+  orientation: 'landscape' | 'portrait' = 'landscape'
 ): void {
   const sheet = workbook.addWorksheet('Sheet1', {
     pageSetup: {
-      orientation: 'landscape',
+      orientation,
       paperSize: PAPER_SIZE_A4,
       fitToPage: true,
       fitToWidth: 1,
@@ -182,6 +184,37 @@ export async function buildPlasmidListWorkbook(
       row.entryDate,
     ]),
     `${footerPrefix}Plasmidlist, date: ${dateStamp}`
+  );
+
+  return Buffer.from(await workbook.xlsx.writeBuffer());
+}
+
+/** Legacy glossary export headers and column widths (gmocu.py 2318-2335, 2388-2403) */
+export const GLOSSARY_FEATURE_HEADERS = ['Annotation', 'Alias', 'Risk', 'Organism', 'UID'];
+const GLOSSARY_FEATURE_COLUMN_WIDTHS = [20, 60, 10, 10, 34];
+
+export const GLOSSARY_ORGANISM_HEADERS = ['Full name', 'Short name', 'Risk group', 'UID'];
+const GLOSSARY_ORGANISM_COLUMN_WIDTHS = [50, 20, 10, 34];
+
+/**
+ * Build a glossary export workbook (legacy -ALLEXCEL- / -USEDEXCEL- and the
+ * organism equivalents): portrait A4, repeated header row, fit to one page
+ * wide, gray bordered header, wrapped bordered cells.
+ */
+export async function buildGlossaryWorkbook(
+  entity: 'features' | 'organisms',
+  rows: string[][],
+  footer: string
+): Promise<Buffer> {
+  const workbook = new ExcelJS.Workbook();
+
+  addFormattedSheet(
+    workbook,
+    entity === 'features' ? GLOSSARY_FEATURE_HEADERS : GLOSSARY_ORGANISM_HEADERS,
+    entity === 'features' ? GLOSSARY_FEATURE_COLUMN_WIDTHS : GLOSSARY_ORGANISM_COLUMN_WIDTHS,
+    rows,
+    footer,
+    'portrait'
   );
 
   return Buffer.from(await workbook.xlsx.writeBuffer());

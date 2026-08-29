@@ -1,6 +1,6 @@
 /**
  * GlossaryExcelService
- * Imports glossary entries from the legacy Excel templates.
+ * Imports and exports glossary entries as the legacy Excel templates.
  *
  * Legacy parity (gmocu.py add_to_features L721, add_to_organisms L741,
  * invoked from -ADDFEATURESEXCEL- L2412 and -ADDEXCELORGA- L2442):
@@ -23,11 +23,12 @@
 
 import ExcelJS from 'exceljs';
 import { randomUUID } from 'crypto';
-import { normalizeAnnotation } from '@domain/cassette-tokens';
+import { cassetteBaseTokens, normalizeAnnotation } from '@domain/cassette-tokens';
 import { DEFAULT_RISK_GROUP, normalizeRisk, trimmedOrNull } from '@domain/glossary-normalization';
 import { DomainError } from '@domain/types';
 import { Logger } from '@infrastructure/logger';
 import { getQueryBuilder } from '@infrastructure/query-builder';
+import { buildGlossaryWorkbook } from './report-workbook';
 
 /** Header cells that identify a sheet when its name is not conclusive */
 const FEATURE_HEADER = 'annotation';
@@ -36,6 +37,24 @@ const ORGANISM_HEADER = 'full_name';
 export interface RenamedAnnotation {
   from: string;
   to: string;
+}
+
+/** 'all' exports every entry; 'used' only those a record references */
+export type ExportScope = 'all' | 'used';
+
+interface FeatureRow {
+  annotation: string;
+  alias: string | null;
+  risk: string;
+  organism: string | null;
+  uid: string;
+}
+
+interface OrganismRow {
+  fullName: string;
+  shortName: string | null;
+  riskGroup: string;
+  uid: string;
 }
 
 export interface GlossaryImportSection {
@@ -95,14 +114,38 @@ function cellText(value: ExcelJS.CellValue): string | null {
   return null;
 }
 
-/** Maps header label -> column number for one worksheet's first row */
+/**
+ * Header spellings accepted for the same column. The template files use
+ * machine names; jlab's own exports use the legacy display headers
+ * ("Full name", "Risk group"), so both must round-trip.
+ */
+const HEADER_ALIASES: Record<string, string> = {
+  full_name: 'full_name',
+  'full name': 'full_name',
+  short_name: 'short_name',
+  'short name': 'short_name',
+  rg: 'rg',
+  risk_group: 'rg',
+  'risk group': 'rg',
+  annotation: 'annotation',
+  alias: 'alias',
+  risk: 'risk',
+  organism: 'organism',
+  uid: 'uid',
+};
+
+/** Maps canonical header key -> column number for one worksheet's first row */
 function headerIndex(sheet: ExcelJS.Worksheet): Map<string, number> {
   const index = new Map<string, number>();
   const header = sheet.getRow(1);
   header.eachCell({ includeEmpty: false }, (cell, columnNumber) => {
     const label = cellText(cell.value);
-    if (label) {
-      index.set(label.toLowerCase(), columnNumber);
+    if (!label) {
+      return;
+    }
+    const canonical = HEADER_ALIASES[label.toLowerCase()];
+    if (canonical && !index.has(canonical)) {
+      index.set(canonical, columnNumber);
     }
   });
   return index;
@@ -349,5 +392,99 @@ export class GlossaryExcelService {
       seenInFile.add(annotation);
       result.features.added.push(annotation);
     }
+  }
+
+  /**
+   * Export the feature glossary.
+   *
+   * Legacy parity (gmocu.py -ALLEXCEL- L2285 / -USEDEXCEL- L2295): 'all'
+   * exports every entry, 'used' only the annotations a cassette references.
+   * Legacy derived its used list with `'-'.join(contents).split('-')`, which
+   * leaves `[variant]` brackets attached so `pLac[v2]` never matched; jlab
+   * uses cassetteBaseTokens(), the tokenizer the app resolves with.
+   */
+  async exportFeatures(scope: ExportScope, initials = ''): Promise<Buffer> {
+    this.logger.info('GlossaryExcelService.exportFeatures', { scope });
+
+    const db = getQueryBuilder();
+    const features = (await db('glossary_features')
+      .select('annotation', 'alias', 'risk', 'organism', 'uid')
+      .orderBy('annotation', 'asc')) as FeatureRow[];
+
+    let selected = features;
+    if (scope === 'used') {
+      const used = await this.usedTokens();
+      selected = features.filter((feature) => used.has(feature.annotation));
+    }
+
+    return buildGlossaryWorkbook(
+      'features',
+      selected.map((f) => [f.annotation, f.alias ?? '', f.risk, f.organism ?? '', f.uid]),
+      `${initials ? initials + ' ' : ''}List of ${scope} nucleic acid features`
+    );
+  }
+
+  /**
+   * Export the organism glossary.
+   *
+   * Legacy parity (-ALLEXCELORGA- L2290 / -USEDEXCELORGA- L2342): 'used'
+   * means referenced by a used feature or by a GMO record. jlab resolves an
+   * organism by short OR full name, as the reports do; legacy matched short
+   * names only.
+   */
+  async exportOrganisms(scope: ExportScope, initials = ''): Promise<Buffer> {
+    this.logger.info('GlossaryExcelService.exportOrganisms', { scope });
+
+    const db = getQueryBuilder();
+    const organisms = (await db('organisms')
+      .select('fullName', 'shortName', 'riskGroup', 'uid')
+      .orderBy('fullName', 'asc')) as OrganismRow[];
+
+    let selected = organisms;
+    if (scope === 'used') {
+      const used = await this.usedTokens();
+      const [features, gmos] = await Promise.all([
+        db('glossary_features').select('annotation', 'organism') as Promise<
+          { annotation: string; organism: string | null }[]
+        >,
+        db('gmos').select('organismName') as Promise<{ organismName: string }[]>,
+      ]);
+
+      const referenced = new Set<string>();
+      for (const feature of features) {
+        if (used.has(feature.annotation) && feature.organism) {
+          referenced.add(feature.organism);
+        }
+      }
+      for (const gmo of gmos) {
+        if (gmo.organismName) {
+          referenced.add(gmo.organismName);
+        }
+      }
+
+      selected = organisms.filter(
+        (organism) =>
+          referenced.has(organism.fullName) ||
+          (organism.shortName !== null && referenced.has(organism.shortName))
+      );
+    }
+
+    return buildGlossaryWorkbook(
+      'organisms',
+      selected.map((o) => [o.fullName, o.shortName ?? '', o.riskGroup, o.uid]),
+      `${initials ? initials + ' ' : ''}List of ${scope} organisms`
+    );
+  }
+
+  /** Base tokens referenced by any cassette (variants stripped) */
+  private async usedTokens(): Promise<Set<string>> {
+    const cassettes = (await getQueryBuilder()('cassettes').select('name')) as { name: string }[];
+    const tokens = new Set<string>();
+    for (const cassette of cassettes) {
+      for (const token of cassetteBaseTokens(cassette.name)) {
+        tokens.add(token);
+      }
+    }
+    return tokens;
   }
 }

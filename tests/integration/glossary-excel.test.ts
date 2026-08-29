@@ -45,6 +45,79 @@ async function buildWorkbook(
   return Buffer.from(await workbook.xlsx.writeBuffer());
 }
 
+const now = () => new Date().toISOString();
+
+async function addPlasmid(name: string): Promise<string> {
+  const id = randomUUID();
+  await db('plasmids').insert({
+    id,
+    name,
+    description: null,
+    sizeBp: null,
+    parentId: null,
+    backboneVector: 'pUC19',
+    status: 'draft',
+    createdAt: now(),
+    updatedAt: now(),
+  });
+  return id;
+}
+
+async function addCassette(plasmidId: string, content: string): Promise<void> {
+  await db('cassettes').insert({
+    id: randomUUID(),
+    plasmidId,
+    name: content,
+    sequence: null,
+    type: 'other',
+    position: 0,
+    createdAt: now(),
+    updatedAt: now(),
+  });
+}
+
+async function addFeature(annotation: string): Promise<void> {
+  await db('glossary_features').insert({
+    id: randomUUID(),
+    annotation,
+    alias: `${annotation} alias`,
+    risk: 'No Risk',
+    organism: 'Escherichia coli',
+    uid: randomUUID().replace(/-/g, ''),
+    synced: false,
+    createdAt: now(),
+    updatedAt: now(),
+  });
+}
+
+async function addOrganism(fullName: string, shortName: string): Promise<void> {
+  await db('organisms').insert({
+    id: randomUUID(),
+    fullName,
+    shortName,
+    riskGroup: '1',
+    uid: randomUUID().replace(/-/g, ''),
+    synced: false,
+    createdAt: now(),
+    updatedAt: now(),
+  });
+}
+
+async function addGmo(plasmidId: string, organismName: string): Promise<void> {
+  await db('gmos').insert({
+    id: randomUUID(),
+    plasmidId,
+    organismName,
+    approval: '-',
+    targetRiskGroup: 1,
+    dateGenerated: '2026-01-01',
+    dateDestroyed: null,
+    entryDate: '2026-01-01',
+    createdAt: now(),
+    updatedAt: now(),
+  });
+}
+
 function uploadRequest(data: Buffer, filename = 'glossary.xlsx'): Request {
   const formData = new FormData();
   formData.append('file', new File([new Uint8Array(data)], filename));
@@ -299,6 +372,137 @@ describe('Glossary Excel import (Integration)', () => {
       await expect(service.importWorkbook(Buffer.alloc(0))).rejects.toMatchObject({
         code: 'VALIDATION',
       });
+    });
+  });
+
+  describe('export', () => {
+    /** Reads an exported workbook back into header + data rows */
+    async function readExport(buffer: Buffer): Promise<{ headers: string[]; rows: string[][] }> {
+      const workbook = new ExcelJS.Workbook();
+      await workbook.xlsx.load(buffer as unknown as ArrayBuffer);
+      const sheet = workbook.worksheets[0]!;
+      const headers = (sheet.getRow(1).values as unknown[]).slice(1).map((v) => String(v));
+      const rows: string[][] = [];
+      for (let n = 2; n <= sheet.rowCount; n += 1) {
+        rows.push(
+          (sheet.getRow(n).values as unknown[])
+            .slice(1)
+            .map((v) => (v === undefined ? '' : String(v)))
+        );
+      }
+      return { headers, rows };
+    }
+
+    /** One used feature/organism plus one unused of each */
+    async function seedUsedAndUnused(): Promise<void> {
+      await addOrganism('Escherichia coli', 'E. coli');
+      await addOrganism('Unused organism', 'UnOr');
+      await addFeature('usedFeat');
+      await addFeature('unusedFeat');
+      const plasmidId = await addPlasmid('pExport');
+      await addCassette(plasmidId, 'usedFeat[v2]');
+      await addGmo(plasmidId, 'Escherichia coli');
+    }
+
+    it('exports all features with the legacy headers and formatting', async () => {
+      await seedUsedAndUnused();
+
+      const { headers, rows } = await readExport(await service.exportFeatures('all'));
+
+      expect(headers).toEqual(['Annotation', 'Alias', 'Risk', 'Organism', 'UID']);
+      expect(rows.map((r) => r[0])).toEqual(['unusedFeat', 'usedFeat']);
+    });
+
+    it('exports only referenced features, stripping [variant] brackets', async () => {
+      await seedUsedAndUnused();
+
+      const { rows } = await readExport(await service.exportFeatures('used'));
+
+      // The cassette says usedFeat[v2]; legacy's split('-') would not match it
+      expect(rows.map((r) => r[0])).toEqual(['usedFeat']);
+    });
+
+    it('exports organisms referenced by used features or GMOs', async () => {
+      await seedUsedAndUnused();
+
+      const all = await readExport(await service.exportOrganisms('all'));
+      const used = await readExport(await service.exportOrganisms('used'));
+
+      expect(all.headers).toEqual(['Full name', 'Short name', 'Risk group', 'UID']);
+      expect(all.rows.map((r) => r[0])).toEqual(['Escherichia coli', 'Unused organism']);
+      expect(used.rows.map((r) => r[0])).toEqual(['Escherichia coli']);
+    });
+
+    it('sets portrait A4 with a repeating header row and an initials footer', async () => {
+      await seedUsedAndUnused();
+
+      const workbook = new ExcelJS.Workbook();
+      await workbook.xlsx.load(
+        (await service.exportFeatures('used', 'JL')) as unknown as ArrayBuffer
+      );
+      const sheet = workbook.worksheets[0]!;
+
+      expect(sheet.pageSetup.orientation).toBe('portrait');
+      expect(sheet.pageSetup.fitToWidth).toBe(1);
+      expect(sheet.pageSetup.printTitlesRow).toBe('1:1');
+      expect(sheet.headerFooter?.oddFooter).toBe('JL List of used nucleic acid features');
+    });
+
+    it('round-trips: an export re-imports into an empty database unchanged', async () => {
+      await seedUsedAndUnused();
+      const featureExport = await service.exportFeatures('all');
+      const organismExport = await service.exportOrganisms('all');
+
+      await cleanTestDb(db);
+      const organismResult = await service.importWorkbook(organismExport);
+      const featureResult = await service.importWorkbook(featureExport);
+
+      // Legacy display headers ("Full name") must be accepted on import
+      expect(organismResult.organisms.added.sort()).toEqual([
+        'Escherichia coli',
+        'Unused organism',
+      ]);
+      expect(featureResult.features.added.sort()).toEqual(['unusedFeat', 'usedFeat']);
+      expect(featureResult.unresolvedFeatureOrganisms).toEqual([]);
+
+      const restored = await db('glossary_features').where('annotation', 'usedFeat').first();
+      expect(restored.alias).toBe('usedFeat alias');
+      expect(restored.organism).toBe('Escherichia coli');
+      expect(restored.risk).toBe('No Risk');
+    });
+
+    it('exports an empty glossary as headers only', async () => {
+      const { headers, rows } = await readExport(await service.exportFeatures('all'));
+
+      expect(headers).toEqual(['Annotation', 'Alias', 'Risk', 'Organism', 'UID']);
+      expect(rows).toEqual([]);
+    });
+  });
+
+  describe('GET /api/glossary/export', () => {
+    it('serves an xlsx download with a scope-named file', async () => {
+      await addFeature('exported');
+
+      const exportRoute = await import('@app/api/glossary/export/route');
+      const response = await exportRoute.GET(
+        asNextRequest(new Request('http://localhost/api/glossary/export?entity=features&scope=all'))
+      );
+
+      expect(response.status).toBe(200);
+      expect(response.headers.get('Content-Type')).toContain('spreadsheetml.sheet');
+      expect(response.headers.get('Content-Disposition')).toContain('ALL_nucleic_acid_features');
+      const body = Buffer.from(await response.arrayBuffer());
+      // PK zip magic — a real workbook, not an error envelope
+      expect(body.subarray(0, 2).toString()).toBe('PK');
+    });
+
+    it('rejects an unknown entity', async () => {
+      const exportRoute = await import('@app/api/glossary/export/route');
+      const response = await exportRoute.GET(
+        asNextRequest(new Request('http://localhost/api/glossary/export?entity=bogus'))
+      );
+
+      expect(response.status).toBe(400);
     });
   });
 

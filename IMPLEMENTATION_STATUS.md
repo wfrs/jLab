@@ -32,22 +32,22 @@
 - Data quality checks (legacy check_plasmids/check_features/check_organisms): DataQualityService with 10 graded checks (error = blocks Formblatt-Z, warning = record incomplete, info = housekeeping), GET /api/health, "Data quality" card on /reports with per-check itemized findings; the two error checks delegate to ReportService.checkGlossaryIntegrity so the card and the export gate cannot disagree. Legacy computed the check_plasmids lists and the redundant/duplicate lists but discarded them at every call site — v2 surfaces them
 - Row-level Formblatt-Z readiness indicator (closes the last open locked UX requirement from ui-ux-direction.md): DataQualityService.plasmidReadiness returns ready/incomplete/blocked per plasmid with deduplicated reasons, GET /api/plasmids/readiness, "Formblatt Z" column in the plasmid table (dot + label, reasons as tooltip and accessible name); soft signal — rows stay editable; refreshed on mount, create/duplicate/delete, and detail-panel close
 - Glossary Excel import (legacy add_to_features/add_to_organisms): GlossaryExcelService + POST /api/glossary/import + "Import from Excel" card on /glossary; reads features and/or organisms sheets by name with a header sniff fallback (legacy read sheet 0 only, so its two-sheet template could never import organisms), normalizes annotations, maps blank/'None' risk to 'No Risk', skips existing and within-file duplicates with itemized reporting, one transaction; shared normalizeRisk/trimmedOrNull extracted to src/domain/glossary-normalization.ts and reused by the v1 DB importer. Verified against the real gmocu/example templates
-- 337 tests passing (unit + integration incl. API route tests via tests/helpers/test-db.ts)
+- Glossary Excel export (legacy -ALLEXCEL-/-USEDEXCEL- and organism equivalents): GET /api/glossary/export?entity=&scope=, four download links on the glossary card, legacy headers/portrait A4/footer/column widths via a generalized report-workbook builder; "used" resolved with cassetteBaseTokens (legacy split on "-" and missed [variant] tokens); exports re-import cleanly (header aliases accept both spellings)
+- 345 tests passing (unit + integration incl. API route tests via tests/helpers/test-db.ts)
 - Parity evidence: docs/plans/parity-evidence/ (plasmid-editable-table-autosave.md, cassette-layer.md, glossary-and-token-editor.md, organisms-and-gmos.md, formblatt-z-reports.md, rename-propagation.md, settings.md, attachments-genbank.md, plasmid-duplication.md, primers-features.md, table-ux-clipboard-keyboard.md, db-import.md)
 
 **Next candidates** (checked against docs/legacy-analysis/feature-inventory.md — the earlier list omitted three real parity gaps):
 
 _Local, testable without credentials:_
 
-1. Glossary Excel **export** (inventory §5; import shipped) — legacy -ALLEXCEL-/-USEDEXCEL- and organism equivalents (gmocu.py 2285-2405); note legacy's used-list derivation does not strip [variant] brackets, use cassetteBaseTokens
-2. Target + favourite organism lists (inventory §6) — also unlocks batch-add GMOs from favourites (inventory §3 gap)
-3. Bulk-create-on-paste (rows below the table); glossary tables adopting the grid navigation
-4. DB backup/export (complement to import; legacy offered a backup before importing)
+1. Target + favourite organism lists (inventory §6) — also unlocks batch-add GMOs from favourites (inventory §3 gap)
+2. Bulk-create-on-paste (rows below the table); glossary tables adopting the grid navigation
+3. DB backup/export (complement to import; legacy offered a backup before importing)
 
 _Needs external credentials, so it cannot be verified autonomously:_
 
-6. Google Sheets glossary sync (inventory §7)
-7. ICE / Google Drive / Filebrowser publishing (inventory §8) — the one remaining nav target (Publish)
+4. Google Sheets glossary sync (inventory §7)
+5. ICE / Google Drive / Filebrowser publishing (inventory §8) — the one remaining nav target (Publish)
 
 ---
 

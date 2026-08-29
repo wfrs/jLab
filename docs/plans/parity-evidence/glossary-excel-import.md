@@ -1,4 +1,4 @@
-# Parity Evidence: Glossary Excel Import
+# Parity Evidence: Glossary Excel Import and Export
 
 **Date:** 2026-08-29
 **Scope:** GlossaryExcelService.importWorkbook, POST /api/glossary/import, GlossaryImportSection card on /glossary; shared `normalizeRisk`/`trimmedOrNull` extracted to `src/domain/glossary-normalization.ts`
@@ -84,10 +84,39 @@ Grounded in the legacy source in-repo: `gmocu/gmocu.py` `add_to_features()` (L72
   their alias and uid; full suite 337/337
 - Compatibility path: sheets without `short_name` / `RG` / `alias` columns
 
-## Follow-up
+## Export (shipped 2026-08-29, same milestone)
 
-Export (legacy `-ALLEXCEL-` / `-USEDEXCEL-` and the organism equivalents,
-L2285–2405) is the other half of inventory §5 and ships separately. Note
-legacy derives its "used features" list with `'-'.join(lst).split('-')`,
-which does not strip `[variant]` brackets — `cassetteBaseTokens()` should be
-used instead.
+Legacy `-ALLEXCEL-` (L2285), `-USEDEXCEL-` (L2295), `-ALLEXCELORGA-` (L2290)
+and `-USEDEXCELORGA-` (L2342) become
+`GlossaryExcelService.exportFeatures/exportOrganisms(scope)` behind
+`GET /api/glossary/export?entity=features|organisms&scope=all|used`, with
+four download links on the glossary card.
+
+| Legacy behavior                                                                                     | New implementation                                              |
+| --------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| Display headers `Annotation, Alias, Risk, Organism, UID` / `Full name, Short name, Risk group, UID` | Same, from `report-workbook.ts`                                 |
+| Portrait A4, fit 1 page wide, repeated header row, footer `{initials} List of used …`               | Same (`addFormattedSheet` gained an orientation parameter)      |
+| Gray `#D3D3D3` bordered wrapped header, bordered wrapped cells, fixed column widths                 | Same widths (20/60/10/10/34 and 50/20/10/34)                    |
+| `USED_…_{user}_{date}.xlsx` filename                                                                | Same, plus the same shape for `ALL_` (legacy omitted user/date) |
+
+Deliberate deviations:
+
+- **Used features are resolved with `cassetteBaseTokens()`.** Legacy built its
+  list as `'-'.join(contents).split('-')`, which leaves `[variant]` brackets
+  attached, so a cassette holding `pLac[v2]` never matched `pLac` and the
+  feature was silently omitted from a "used" export. A test covers this.
+- **Used organisms match on short OR full name**, as the reports do; legacy
+  matched `short_name` only.
+- **Empty result exports headers only.** Legacy raised
+  "There must be more than one element in the list" because it interpolated a
+  Python tuple straight into SQL (a one-element tuple renders `('x',)`).
+- **Round-trip.** Import accepts the legacy display headers as well as the
+  template's machine names (`Full name` → `full_name`, `Risk group` → `RG`),
+  so an export can be re-imported here or in another instance — legacy could
+  not re-import its own organism exports. Asserted by a round-trip test.
+
+Export verification: 27 tests in `tests/integration/glossary-excel.test.ts`
+(8 new for export, incl. the round-trip and page-setup assertions), plus a
+live check against the working database — 60 features exported for `all`,
+58 for `used`, 27 used organisms, portrait orientation, and filenames
+carrying the configured user name and date.

@@ -14,6 +14,14 @@ import type { GlossaryImportResult } from '@/services/glossary-excel.service';
 /** Keys listed inline before the rest are summarized as a count */
 const KEY_PREVIEW_LIMIT = 12;
 
+/** Legacy offered all/used exports for each glossary */
+const EXPORTS = [
+  { entity: 'features', scope: 'all', label: 'All features' },
+  { entity: 'features', scope: 'used', label: 'Used features' },
+  { entity: 'organisms', scope: 'all', label: 'All organisms' },
+  { entity: 'organisms', scope: 'used', label: 'Used organisms' },
+] as const;
+
 async function postWorkbook(file: File): Promise<GlossaryImportResult> {
   const formData = new FormData();
   formData.append('file', file);
@@ -75,7 +83,7 @@ export function GlossaryImportSection({
   return (
     <Card className="mb-6">
       <CardHeader>
-        <CardTitle>Import from Excel</CardTitle>
+        <CardTitle>Excel import / export</CardTitle>
       </CardHeader>
       <CardContent>
         <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
@@ -146,6 +154,24 @@ export function GlossaryImportSection({
             )}
           </div>
         )}
+        <div className="mt-5 pt-4 border-t border-gray-200 dark:border-gray-700">
+          <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
+            Download the glossary as a formatted workbook — <span className="font-medium">all</span>{' '}
+            entries, or only those a cassette or GMO actually references. Exported files can be
+            imported again here or into another jlab instance.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {EXPORTS.map((item) => (
+              <a
+                key={`${item.entity}-${item.scope}`}
+                href={`/api/glossary/export?entity=${item.entity}&scope=${item.scope}`}
+                className="px-3 py-1.5 text-xs rounded-md border border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+              >
+                {item.label}
+              </a>
+            ))}
+          </div>
+        </div>
       </CardContent>
     </Card>
   );
