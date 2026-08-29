@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { clsx } from 'clsx';
 import { NucleicAcidsTab } from '@/components/glossary/NucleicAcidsTab';
 import { OrganismsTab } from '@/components/glossary/OrganismsTab';
+import { GlossaryImportSection } from '@/components/glossary/GlossaryImportSection';
 
 const TABS = [
   { id: 'nucleic-acids', label: 'Nucleic acids' },
@@ -19,6 +20,8 @@ type TabId = (typeof TABS)[number]['id'];
  */
 export default function GlossaryPage() {
   const [activeTab, setActiveTab] = useState<TabId>('nucleic-acids');
+  // Bumped after an Excel import so the active tab remounts and refetches
+  const [dataVersion, setDataVersion] = useState(0);
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
@@ -52,7 +55,13 @@ export default function GlossaryPage() {
           </div>
         </div>
 
-        {activeTab === 'nucleic-acids' ? <NucleicAcidsTab /> : <OrganismsTab />}
+        <GlossaryImportSection onImported={() => setDataVersion((v) => v + 1)} />
+
+        {activeTab === 'nucleic-acids' ? (
+          <NucleicAcidsTab key={dataVersion} />
+        ) : (
+          <OrganismsTab key={dataVersion} />
+        )}
       </div>
     </div>
   );

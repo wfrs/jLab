@@ -31,6 +31,7 @@ import { randomUUID } from 'crypto';
 import knex, { Knex } from 'knex';
 import { getQueryBuilder } from '@infrastructure/query-builder';
 import { cassetteBaseTokens } from '@domain/cassette-tokens';
+import { DEFAULT_RISK_GROUP, normalizeRisk, trimmedOrNull } from '@domain/glossary-normalization';
 import { DomainError, Plasmid } from '@domain/types';
 import { Logger } from '@infrastructure/logger';
 
@@ -45,10 +46,8 @@ const REQUIRED_SOURCE_TABLES = [
 
 const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const GENBANK_EXTENSION_PATTERN = /\.(gb|gbk)$/i;
-const DEFAULT_RISK = 'No Risk';
 const DEFAULT_APPROVAL = '-';
 const DEFAULT_TARGET_RISK_GROUP = 1;
-const DEFAULT_RISK_GROUP = '1';
 
 /** Legacy SelectionValues labels -> v2 plasmid status */
 const LEGACY_STATUS_TO_V2: Record<string, Plasmid['status']> = {
@@ -133,14 +132,6 @@ function newUid(): string {
   return randomUUID().replace(/-/g, '');
 }
 
-function trimmedOrNull(value: string | null | undefined): string | null {
-  if (typeof value !== 'string') {
-    return null;
-  }
-  const trimmed = value.trim();
-  return trimmed.length > 0 ? trimmed : null;
-}
-
 /** Legacy date columns hold YYYY-MM-DD; anything else falls back */
 function isoDateOrNull(value: string | null | undefined): string | null {
   const trimmed = trimmedOrNull(value);
@@ -162,14 +153,6 @@ function composeDescription(row: LegacyPlasmidRow): string | null {
   if (clone) parts.push(`Clone: ${clone}`);
   if (marker) parts.push(`Marker: ${marker}`);
   return parts.length > 0 ? parts.join('\n') : null;
-}
-
-function normalizeRisk(risk: string | null | undefined): string {
-  const trimmed = trimmedOrNull(risk);
-  if (!trimmed || trimmed === 'None') {
-    return DEFAULT_RISK;
-  }
-  return trimmed;
 }
 
 /** Local organism resolution: short OR full name (report.service semantics) */

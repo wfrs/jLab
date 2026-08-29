@@ -31,14 +31,15 @@
 - Linear design language adopted app-wide (2026-08-29): design system installed at .claude/skills/design-taste-frontend/references/linear-design-system.md; gray/blue Tailwind scales remapped to Linear's canvas/surface ladder (#010102 → #0f1011 → #141516 → #18191a) and single lavender accent (#5e6ad2), Inter via next/font, hairline borders, no dark shadows (elevation = surface steps + panel-lift top-edge highlight), quiet tinted status badges, surface-3 floating overlays; styling only — no behavior changes, all 296 tests still pass
 - Data quality checks (legacy check_plasmids/check_features/check_organisms): DataQualityService with 10 graded checks (error = blocks Formblatt-Z, warning = record incomplete, info = housekeeping), GET /api/health, "Data quality" card on /reports with per-check itemized findings; the two error checks delegate to ReportService.checkGlossaryIntegrity so the card and the export gate cannot disagree. Legacy computed the check_plasmids lists and the redundant/duplicate lists but discarded them at every call site — v2 surfaces them
 - Row-level Formblatt-Z readiness indicator (closes the last open locked UX requirement from ui-ux-direction.md): DataQualityService.plasmidReadiness returns ready/incomplete/blocked per plasmid with deduplicated reasons, GET /api/plasmids/readiness, "Formblatt Z" column in the plasmid table (dot + label, reasons as tooltip and accessible name); soft signal — rows stay editable; refreshed on mount, create/duplicate/delete, and detail-panel close
-- 318 tests passing (unit + integration incl. API route tests via tests/helpers/test-db.ts)
+- Glossary Excel import (legacy add_to_features/add_to_organisms): GlossaryExcelService + POST /api/glossary/import + "Import from Excel" card on /glossary; reads features and/or organisms sheets by name with a header sniff fallback (legacy read sheet 0 only, so its two-sheet template could never import organisms), normalizes annotations, maps blank/'None' risk to 'No Risk', skips existing and within-file duplicates with itemized reporting, one transaction; shared normalizeRisk/trimmedOrNull extracted to src/domain/glossary-normalization.ts and reused by the v1 DB importer. Verified against the real gmocu/example templates
+- 337 tests passing (unit + integration incl. API route tests via tests/helpers/test-db.ts)
 - Parity evidence: docs/plans/parity-evidence/ (plasmid-editable-table-autosave.md, cassette-layer.md, glossary-and-token-editor.md, organisms-and-gmos.md, formblatt-z-reports.md, rename-propagation.md, settings.md, attachments-genbank.md, plasmid-duplication.md, primers-features.md, table-ux-clipboard-keyboard.md, db-import.md)
 
 **Next candidates** (checked against docs/legacy-analysis/feature-inventory.md — the earlier list omitted three real parity gaps):
 
 _Local, testable without credentials:_
 
-1. Glossary Excel import/export (inventory §5) — template-based import, export all/used-only; exceljs already a dependency
+1. Glossary Excel **export** (inventory §5; import shipped) — legacy -ALLEXCEL-/-USEDEXCEL- and organism equivalents (gmocu.py 2285-2405); note legacy's used-list derivation does not strip [variant] brackets, use cassetteBaseTokens
 2. Target + favourite organism lists (inventory §6) — also unlocks batch-add GMOs from favourites (inventory §3 gap)
 3. Bulk-create-on-paste (rows below the table); glossary tables adopting the grid navigation
 4. DB backup/export (complement to import; legacy offered a backup before importing)
