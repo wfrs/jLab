@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
+import { DataQualitySection } from '@/components/reports/DataQualitySection';
 
 interface IntegrityErrors {
   message: string;
@@ -98,6 +99,8 @@ export default function ReportsPage() {
             Regulatory exports as formatted, print-ready XLSX files.
           </p>
         </div>
+
+        <DataQualitySection />
 
         {errors && (
           <div
