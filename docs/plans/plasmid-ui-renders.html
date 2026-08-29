@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Plasmid Workflow UI Renders</title>
+    <style>
+      :root {
+        --bg: #0b1020;
+        --card: #121a33;
+        --line: #2d3a69;
+        --text: #e7ecff;
+        --muted: #a9b5df;
+        --accent: #7aa2ff;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        font-family:
+          Inter,
+          Segoe UI,
+          Arial,
+          sans-serif;
+        background: var(--bg);
+        color: var(--text);
+        padding: 24px;
+      }
+      h1 {
+        margin: 0 0 8px;
+        font-size: 24px;
+      }
+      p {
+        margin: 0 0 18px;
+        color: var(--muted);
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(480px, 1fr));
+        gap: 18px;
+      }
+      .card {
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        background: var(--card);
+        padding: 14px;
+        min-height: 360px;
+      }
+      .title {
+        font-size: 16px;
+        margin: 0 0 10px;
+        color: var(--accent);
+      }
+      .muted {
+        color: var(--muted);
+        font-size: 12px;
+        margin-bottom: 10px;
+      }
+      .wf {
+        border: 1px dashed var(--line);
+        border-radius: 10px;
+        padding: 8px;
+        height: 280px;
+        display: grid;
+        gap: 8px;
+        background: rgba(255, 255, 255, 0.02);
+      }
+      .box {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 6px 8px;
+        font-size: 12px;
+        color: var(--muted);
+        background: rgba(255, 255, 255, 0.02);
+      }
+      .row {
+        display: grid;
+        gap: 8px;
+      }
+      .cols-2 {
+        grid-template-columns: 1fr 1fr;
+      }
+      .cols-3 {
+        grid-template-columns: 1fr 1fr 1fr;
+      }
+      .single-page {
+        grid-template-rows: 38px 1fr;
+      }
+      .single-layout {
+        display: grid;
+        grid-template-columns: 1.1fr 1fr;
+        gap: 8px;
+        height: 100%;
+      }
+      .wizard {
+        grid-template-rows: 34px 1fr 34px;
+      }
+      .master-detail {
+        grid-template-rows: 34px 1fr;
+      }
+      .master-layout {
+        display: grid;
+        grid-template-columns: 0.9fr 1.2fr;
+        gap: 8px;
+        height: 100%;
+      }
+      .table-slide {
+        grid-template-rows: 34px 1fr;
+      }
+      .table-layout {
+        display: grid;
+        grid-template-columns: 1.2fr 0.9fr;
+        gap: 8px;
+        height: 100%;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Plasmid Workflow — UI/UX Render Options</h1>
+    <p>Low-fidelity wireframes to choose interaction style before high-fidelity design.</p>
+
+    <div class="grid">
+      <section class="card">
+        <h2 class="title">1) Single-page workspace with panels</h2>
+        <div class="muted">Best for power users. Fewer clicks, faster editing loops.</div>
+        <div class="wf single-page">
+          <div class="box">Top Toolbar: Search | New Plasmid | Duplicate | Save | Publish</div>
+          <div class="single-layout">
+            <div class="row">
+              <div class="box">Plasmid list (filterable)</div>
+              <div class="box">Core metadata form</div>
+              <div class="box">GMO entries + status timeline</div>
+            </div>
+            <div class="row">
+              <div class="box">Cassette composer with token helper</div>
+              <div class="box">Attachments + GenBank</div>
+              <div class="box">Validation panel (missing fields, risks, warnings)</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2 class="title">2) Step-by-step wizard flow</h2>
+        <div class="muted">Best for guided onboarding and fewer data-entry mistakes.</div>
+        <div class="wf wizard">
+          <div class="box">Stepper: 1 Metadata → 2 Cassettes → 3 GMOs → 4 Files → 5 Review</div>
+          <div class="row">
+            <div class="box">Current Step Form Area (single focus)</div>
+            <div class="row cols-2">
+              <div class="box">Inline help</div>
+              <div class="box">Progress + completion hints</div>
+            </div>
+            <div class="box">Context summary (sticky side card)</div>
+          </div>
+          <div class="row cols-3">
+            <div class="box">Back</div>
+            <div class="box">Save Draft</div>
+            <div class="box">Next</div>
+          </div>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2 class="title">3) Master-detail split view</h2>
+        <div class="muted">
+          Balanced approach for browsing + editing with good context retention.
+        </div>
+        <div class="wf master-detail">
+          <div class="box">Header: Search | Filters | New | Bulk actions</div>
+          <div class="master-layout">
+            <div class="row">
+              <div class="box">Left: Plasmid table/list</div>
+              <div class="box">Quick stats + badges</div>
+            </div>
+            <div class="row">
+              <div class="box">Right: Selected plasmid details</div>
+              <div class="row cols-2">
+                <div class="box">Tabs: Core / Cassettes / GMOs</div>
+                <div class="box">Files / Publish / History</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2 class="title">4) Table-first + slide-over editors</h2>
+        <div class="muted">Strong for fast list operations and compact desktop workflows.</div>
+        <div class="wf table-slide">
+          <div class="box">Toolbar: Search | Filters | Batch actions | Export</div>
+          <div class="table-layout">
+            <div class="row">
+              <div class="box">Main table (sortable, columns, status chips)</div>
+              <div class="box">Bulk selection actions</div>
+            </div>
+            <div class="row">
+              <div class="box">Slide-over editor: details + save/cancel</div>
+              <div class="box">Inline validation + quick links</div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+  </body>
+</html>

@@ -1,0 +1,14 @@
+# Build output and generated files
+.next/
+node_modules/
+coverage/
+dist/
+build/
+*.tsbuildinfo
+
+# Local tool state
+.claude/
+
+# Logs and databases
+*.log
+*.db
