@@ -14,7 +14,7 @@ import {
   handleGridKeyDown,
   locateCell,
 } from '@/components/ui/grid-navigation';
-import { buildRowPatch, parsePasteText } from '@/components/plasmids/paste-grid';
+import { buildRowCreate, buildRowPatch, parsePasteText } from '@/components/plasmids/paste-grid';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import { PlasmidDetailPanel } from '@/components/plasmids/PlasmidDetailPanel';
 import {
@@ -176,7 +176,10 @@ export default function PlasmidsPage() {
   /**
    * Clipboard paste onto a display-mode cell: a TSV block fills existing
    * rows downward and editable columns rightward from the anchor cell
-   * (one PATCH per row). Overflow beyond the grid is reported, not applied.
+   * (one PATCH per row). Rows past the last table row become NEW plasmids
+   * (one POST per row, aligned to the same columns as the anchor row) —
+   * a pasted row needs a name to be created. Columns past the grid edge
+   * are still ignored and counted.
    */
   const handleGridPaste = async (event: React.ClipboardEvent) => {
     const anchor = (event.target as HTMLElement).closest?.('[data-editable-cell]');
@@ -190,21 +193,16 @@ export default function PlasmidsPage() {
 
     const grid = parsePasteText(text);
     const failures: string[] = [];
+    const createdRows: Plasmid[] = [];
     let cellsApplied = 0;
     let rowsTouched = 0;
     let overflow = 0;
 
-    for (let r = 0; r < grid.length; r++) {
-      const row = position.rows[position.rowIndex + r];
-      if (!row) {
-        overflow += grid[r].length;
-        continue;
-      }
-      const id = row.getAttribute('data-row-key');
-      if (!id) continue;
-
-      const rowCells = cellsOfRow(row);
-      const columnIds = grid[r].map((_cell, c) => {
+    // Overflow rows have no row element to read columns from; every row
+    // shares the anchor row's layout, so align against that once.
+    const anchorRowCells = cellsOfRow(position.row);
+    const columnIdsFor = (rowCells: HTMLElement[], cells: string[]): (string | null)[] =>
+      cells.map((_cell, c) => {
         const cellElement = rowCells[position.colIndex + c];
         if (!cellElement) {
           overflow += 1;
@@ -213,7 +211,28 @@ export default function PlasmidsPage() {
         return cellElement.getAttribute('data-col');
       });
 
-      const { patch, errors } = buildRowPatch(columnIds, grid[r]);
+    for (let r = 0; r < grid.length; r++) {
+      const row = position.rows[position.rowIndex + r];
+
+      if (!row) {
+        // Below the table: this row becomes a new plasmid
+        const { payload, errors } = buildRowCreate(columnIdsFor(anchorRowCells, grid[r]), grid[r]);
+        const rowLabel = payload?.name ?? `pasted row ${r + 1}`;
+        errors.forEach((message) => failures.push(`${rowLabel}: ${message}`));
+        if (payload) {
+          try {
+            createdRows.push(await createPlasmid(payload));
+          } catch (err) {
+            failures.push(`${rowLabel}: ${err instanceof Error ? err.message : 'create failed'}`);
+          }
+        }
+        continue;
+      }
+
+      const id = row.getAttribute('data-row-key');
+      if (!id) continue;
+
+      const { patch, errors } = buildRowPatch(columnIdsFor(cellsOfRow(row), grid[r]), grid[r]);
       const rowName = plasmids.find((p) => p.id === id)?.name ?? id;
       errors.forEach((message) => failures.push(`${rowName}: ${message}`));
 
@@ -228,14 +247,23 @@ export default function PlasmidsPage() {
       }
     }
 
+    if (createdRows.length > 0) {
+      // They were pasted below the table, so that is where they appear
+      setPlasmids((prev) => [...prev, ...createdRows]);
+      void refreshReadiness();
+    }
+
     const summary: string[] = [];
     if (cellsApplied > 0) {
       summary.push(
         `Pasted ${cellsApplied} cell${cellsApplied !== 1 ? 's' : ''} into ${rowsTouched} row${rowsTouched !== 1 ? 's' : ''}`
       );
     }
+    if (createdRows.length > 0) {
+      summary.push(`Created ${createdRows.length} plasmid${createdRows.length !== 1 ? 's' : ''}`);
+    }
     if (overflow > 0) {
-      summary.push(`${overflow} cell${overflow !== 1 ? 's' : ''} beyond the table ignored`);
+      summary.push(`${overflow} cell${overflow !== 1 ? 's' : ''} beyond the last column ignored`);
     }
     setNotice(summary.length > 0 ? summary.join(' · ') : null);
     setError(failures.length > 0 ? failures.join('; ') : null);

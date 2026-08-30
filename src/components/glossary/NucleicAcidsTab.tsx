@@ -7,7 +7,8 @@ import { GlossaryFeature } from '@/domain/types';
 import { Table, TableColumn } from '@/components/ui/Table';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
-import { EditableCell, EditableCellValue } from '@/components/ui/EditableCell';
+import { CellNavDirection, EditableCell, EditableCellValue } from '@/components/ui/EditableCell';
+import { focusNeighborCell, handleGridKeyDown } from '@/components/ui/grid-navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import {
   createGlossaryFeature,
@@ -66,6 +67,18 @@ export function NucleicAcidsTab() {
       throw err;
     }
   }, []);
+
+  /** Spreadsheet navigation: EditableCell hands off after Enter/Tab commits */
+  const handleCellNavigate = useCallback((direction: CellNavDirection, from: HTMLElement) => {
+    focusNeighborCell(from, direction);
+  }, []);
+
+  /** Arrow/Home/End navigation and Ctrl+C copy on display-mode cells */
+  const handleGridKeys = (event: React.KeyboardEvent) => {
+    if (handleGridKeyDown(event)) {
+      event.preventDefault();
+    }
+  };
 
   const handleCreate = async () => {
     if (newAnnotation.trim().length === 0) return;
@@ -135,6 +148,7 @@ export function NucleicAcidsTab() {
         <EditableCell
           value={feature.annotation}
           mono
+          onNavigate={handleCellNavigate}
           ariaLabel={`Annotation ${feature.annotation}`}
           onCommit={(value: EditableCellValue) =>
             saveField(feature.id, { annotation: String(value ?? '') })
@@ -150,6 +164,7 @@ export function NucleicAcidsTab() {
       render: (feature) => (
         <EditableCell
           value={feature.alias ?? null}
+          onNavigate={handleCellNavigate}
           ariaLabel={`Alias of ${feature.annotation}`}
           onCommit={(value: EditableCellValue) =>
             saveField(feature.id, { alias: value === null ? null : String(value) })
@@ -165,6 +180,7 @@ export function NucleicAcidsTab() {
       render: (feature) => (
         <EditableCell
           value={feature.risk}
+          onNavigate={handleCellNavigate}
           ariaLabel={`Risk of ${feature.annotation}`}
           onCommit={(value: EditableCellValue) =>
             saveField(feature.id, { risk: String(value ?? '') })
@@ -180,6 +196,7 @@ export function NucleicAcidsTab() {
       render: (feature) => (
         <EditableCell
           value={feature.organism ?? null}
+          onNavigate={handleCellNavigate}
           ariaLabel={`Organism of ${feature.annotation}`}
           onCommit={(value: EditableCellValue) =>
             saveField(feature.id, { organism: value === null ? null : String(value) })
@@ -252,32 +269,34 @@ export function NucleicAcidsTab() {
             </div>
           )}
 
-          <Table
-            columns={columns}
-            data={sortedFeatures}
-            rowKey={(feature) => feature.id}
-            selectedRows={selectedRows}
-            onRowSelect={(id, selected) => {
-              setSelectedRows((prev) => {
-                const next = new Set(prev);
-                if (selected) {
-                  next.add(id);
-                } else {
-                  next.delete(id);
-                }
-                return next;
-              });
-            }}
-            onSort={(columnId, direction) => {
-              setSortedBy(columnId);
-              setSortDirection(direction);
-            }}
-            sortedBy={sortedBy}
-            sortDirection={sortDirection}
-            loading={isLoading}
-            emptyMessage="No glossary features yet. Add one above."
-            striped
-          />
+          <div onKeyDown={handleGridKeys}>
+            <Table
+              columns={columns}
+              data={sortedFeatures}
+              rowKey={(feature) => feature.id}
+              selectedRows={selectedRows}
+              onRowSelect={(id, selected) => {
+                setSelectedRows((prev) => {
+                  const next = new Set(prev);
+                  if (selected) {
+                    next.add(id);
+                  } else {
+                    next.delete(id);
+                  }
+                  return next;
+                });
+              }}
+              onSort={(columnId, direction) => {
+                setSortedBy(columnId);
+                setSortDirection(direction);
+              }}
+              sortedBy={sortedBy}
+              sortDirection={sortDirection}
+              loading={isLoading}
+              emptyMessage="No glossary features yet. Add one above."
+              striped
+            />
+          </div>
         </CardContent>
       </Card>
 

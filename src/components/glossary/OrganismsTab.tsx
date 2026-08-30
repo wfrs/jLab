@@ -10,7 +10,8 @@ import { Organism } from '@/domain/types';
 import { Table, TableColumn } from '@/components/ui/Table';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
-import { EditableCell, EditableCellValue } from '@/components/ui/EditableCell';
+import { CellNavDirection, EditableCell, EditableCellValue } from '@/components/ui/EditableCell';
+import { focusNeighborCell, handleGridKeyDown } from '@/components/ui/grid-navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import {
   createOrganism,
@@ -62,6 +63,18 @@ export function OrganismsTab(): JSX.Element {
       throw err;
     }
   }, []);
+
+  /** Spreadsheet navigation: EditableCell hands off after Enter/Tab commits */
+  const handleCellNavigate = useCallback((direction: CellNavDirection, from: HTMLElement) => {
+    focusNeighborCell(from, direction);
+  }, []);
+
+  /** Arrow/Home/End navigation and Ctrl+C copy on display-mode cells */
+  const handleGridKeys = (event: React.KeyboardEvent) => {
+    if (handleGridKeyDown(event)) {
+      event.preventDefault();
+    }
+  };
 
   const handleCreate = async () => {
     if (newFullName.trim().length === 0) return;
@@ -129,6 +142,7 @@ export function OrganismsTab(): JSX.Element {
       render: (organism) => (
         <EditableCell
           value={organism.fullName}
+          onNavigate={handleCellNavigate}
           ariaLabel={`Full name of ${organism.fullName}`}
           onCommit={(value: EditableCellValue) =>
             saveField(organism.id, { fullName: String(value ?? '') })
@@ -145,6 +159,7 @@ export function OrganismsTab(): JSX.Element {
       render: (organism) => (
         <EditableCell
           value={organism.shortName ?? null}
+          onNavigate={handleCellNavigate}
           ariaLabel={`Short name of ${organism.fullName}`}
           onCommit={(value: EditableCellValue) =>
             saveField(organism.id, { shortName: value === null ? null : String(value) })
@@ -161,6 +176,7 @@ export function OrganismsTab(): JSX.Element {
         <EditableCell
           value={organism.riskGroup}
           mono
+          onNavigate={handleCellNavigate}
           ariaLabel={`Risk group of ${organism.fullName}`}
           onCommit={(value: EditableCellValue) =>
             saveField(organism.id, { riskGroup: String(value ?? '') })
@@ -232,32 +248,34 @@ export function OrganismsTab(): JSX.Element {
             </div>
           )}
 
-          <Table
-            columns={columns}
-            data={sortedOrganisms}
-            rowKey={(organism) => organism.id}
-            selectedRows={selectedRows}
-            onRowSelect={(id, selected) => {
-              setSelectedRows((prev) => {
-                const next = new Set(prev);
-                if (selected) {
-                  next.add(id);
-                } else {
-                  next.delete(id);
-                }
-                return next;
-              });
-            }}
-            onSort={(columnId, direction) => {
-              setSortedBy(columnId);
-              setSortDirection(direction);
-            }}
-            sortedBy={sortedBy}
-            sortDirection={sortDirection}
-            loading={isLoading}
-            emptyMessage="No organisms yet. Add one above."
-            striped
-          />
+          <div onKeyDown={handleGridKeys}>
+            <Table
+              columns={columns}
+              data={sortedOrganisms}
+              rowKey={(organism) => organism.id}
+              selectedRows={selectedRows}
+              onRowSelect={(id, selected) => {
+                setSelectedRows((prev) => {
+                  const next = new Set(prev);
+                  if (selected) {
+                    next.add(id);
+                  } else {
+                    next.delete(id);
+                  }
+                  return next;
+                });
+              }}
+              onSort={(columnId, direction) => {
+                setSortedBy(columnId);
+                setSortDirection(direction);
+              }}
+              sortedBy={sortedBy}
+              sortDirection={sortDirection}
+              loading={isLoading}
+              emptyMessage="No organisms yet. Add one above."
+              striped
+            />
+          </div>
         </CardContent>
       </Card>
 

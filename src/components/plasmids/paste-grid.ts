@@ -5,7 +5,7 @@
  * downward and editable columns rightward from the anchor cell.
  */
 
-import { UpdatePlasmidPayload } from './api-client';
+import { CreatePlasmidPayload, UpdatePlasmidPayload } from './api-client';
 
 const STATUS_VALUES = ['draft', 'validated', 'archived'] as const;
 type StatusValue = (typeof STATUS_VALUES)[number];
@@ -88,4 +88,36 @@ export function buildRowPatch(columnIds: (string | null)[], cells: string[]): Ro
   });
 
   return { patch, errors };
+}
+
+export interface RowCreateResult {
+  /** Null when the row cannot become a plasmid (no name in an aligned cell) */
+  payload: CreatePlasmidPayload | null;
+  errors: string[];
+}
+
+/**
+ * Build a create payload for a pasted row that landed below the table.
+ * Same column alignment and cell parsing as buildRowPatch, but the result
+ * must stand on its own: without a non-empty name in an aligned column the
+ * row cannot be created and says so.
+ */
+export function buildRowCreate(columnIds: (string | null)[], cells: string[]): RowCreateResult {
+  const { patch, errors } = buildRowPatch(columnIds, cells);
+
+  if (!patch.name) {
+    // A name error ("name cannot be empty") already explains itself
+    if (!errors.some((message) => message.includes('name'))) {
+      errors.push('needs a name to create a plasmid');
+    }
+    return { payload: null, errors };
+  }
+
+  const payload: CreatePlasmidPayload = { name: patch.name };
+  if (patch.description !== undefined) payload.description = patch.description;
+  // Update semantics allow null to clear; a new plasmid just omits the field
+  if (typeof patch.sizeBp === 'number') payload.sizeBp = patch.sizeBp;
+  if (patch.status !== undefined) payload.status = patch.status;
+
+  return { payload, errors };
 }

@@ -36,20 +36,20 @@
 - Label printing (docs/plans/label-printing.md, phases 0-3 complete 2026-08-29): plasmid + glycerol stock label sheets reproducing the lab's Word templates from OOXML forensics (A4 grids, start-cell picker, auto-fit font steps, dense layouts), print history + reprint past sheets, plasmid_preps + glycerol_stocks tables with lab spreadsheet import, Golden Gate mix calculator (workbook-parity), prep recording dialog; Playwright print-pipeline suite (tests/e2e)
 - Settings danger zone (2026-08-29): DatabaseResetService (auto-backup via VACUUM INTO, transactional wipe of all data tables, settings preserved, VACUUM reclaim), type-to-confirm UI; Settings page reworked into sections (General / Organisms / Data / Danger zone)
 - Target + favourite organism lists (legacy OrganismSelection/OrganismFavourites, 2026-08-30): organism_targets table (favourite = starred target, so the legacy "favourites must exist in targets" guardrail is structural), OrganismTargetService + /api/settings/organism-targets, glossary rename/delete propagation, "Organisms" card on /settings, GMO picker leads with a Target organisms optgroup, batch-add favourites as GMOs (legacy -ADDFAV-) with live-GMO skip that resolves imported short names (AgTu) via the glossary
-- 590 Jest tests passing (38 suites, unit + integration incl. API route tests via tests/helpers/test-db.ts) + 32 Playwright print-layout tests
-- Parity evidence: docs/plans/parity-evidence/ (plasmid-editable-table-autosave.md, cassette-layer.md, glossary-and-token-editor.md, organisms-and-gmos.md, formblatt-z-reports.md, rename-propagation.md, settings.md, attachments-genbank.md, plasmid-duplication.md, primers-features.md, table-ux-clipboard-keyboard.md, db-import.md, data-quality-checks.md, glossary-excel-import.md, database-reset.md, label-printing-phase-{0,1,2,3}.md, organism-target-lists.md)
+- Bulk-create-on-paste + glossary grid navigation (2026-08-30, closes the follow-ups from table-ux-clipboard-keyboard.md): TSV rows pasted below the last plasmid row create new plasmids (buildRowCreate, name required, per-row errors, readiness refresh); both glossary tabs adopt the spreadsheet keyboard navigation (arrows/Home/End, Ctrl+C, Enter/Tab commit-move, Escape refocus)
+- 596 Jest tests passing (38 suites, unit + integration incl. API route tests via tests/helpers/test-db.ts) + 32 Playwright print-layout tests
+- Parity evidence: docs/plans/parity-evidence/ (plasmid-editable-table-autosave.md, cassette-layer.md, glossary-and-token-editor.md, organisms-and-gmos.md, formblatt-z-reports.md, rename-propagation.md, settings.md, attachments-genbank.md, plasmid-duplication.md, primers-features.md, table-ux-clipboard-keyboard.md, db-import.md, data-quality-checks.md, glossary-excel-import.md, database-reset.md, label-printing-phase-{0,1,2,3}.md, organism-target-lists.md, bulk-create-paste-glossary-nav.md)
 
 **Next candidates** (checked against docs/legacy-analysis/feature-inventory.md — the earlier list omitted three real parity gaps):
 
 _Local, testable without credentials:_
 
-1. Bulk-create-on-paste (rows below the table); glossary tables adopting the grid navigation
-2. DB backup/export (complement to import; legacy offered a backup before importing — the danger zone's VACUUM INTO backup covers the reset path, but there is no user-facing "download a backup" yet)
+1. DB backup/export (complement to import; legacy offered a backup before importing — the danger zone's VACUUM INTO backup covers the reset path, but there is no user-facing "download a backup" yet)
 
 _Needs external credentials, so it cannot be verified autonomously:_
 
-3. Google Sheets glossary sync (inventory §7)
-4. ICE / Google Drive / Filebrowser publishing (inventory §8) — the one remaining nav target (Publish)
+2. Google Sheets glossary sync (inventory §7)
+3. ICE / Google Drive / Filebrowser publishing (inventory §8) — the one remaining nav target (Publish)
 
 ---
 

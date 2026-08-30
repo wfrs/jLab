@@ -2,7 +2,12 @@
  * Unit Tests: clipboard paste parsing for the plasmid table (pure logic)
  */
 
-import { buildRowPatch, normalizeStatus, parsePasteText } from '@/components/plasmids/paste-grid';
+import {
+  buildRowCreate,
+  buildRowPatch,
+  normalizeStatus,
+  parsePasteText,
+} from '@/components/plasmids/paste-grid';
 
 describe('paste-grid', () => {
   describe('parsePasteText', () => {
@@ -78,6 +83,52 @@ describe('paste-grid', () => {
       const { patch, errors } = buildRowPatch([null, 'name'], ['ignored', '  ']);
       expect(patch).toEqual({});
       expect(errors).toEqual(['name cannot be empty']);
+    });
+  });
+
+  describe('buildRowCreate (rows pasted below the table)', () => {
+    it('builds a full create payload from aligned cells', () => {
+      const { payload, errors } = buildRowCreate(
+        ['name', 'description', 'sizeBp', 'status'],
+        ['pNew', 'A vector', '6,425', 'Validated']
+      );
+      expect(payload).toEqual({
+        name: 'pNew',
+        description: 'A vector',
+        sizeBp: 6425,
+        status: 'validated',
+      });
+      expect(errors).toEqual([]);
+    });
+
+    it('creates from a name alone', () => {
+      expect(buildRowCreate(['name'], ['pOnly']).payload).toEqual({ name: 'pOnly' });
+    });
+
+    it('omits an empty size instead of sending null', () => {
+      const { payload } = buildRowCreate(['name', 'sizeBp'], ['pNew', '']);
+      expect(payload).toEqual({ name: 'pNew' });
+    });
+
+    it('refuses a row without a name column in reach', () => {
+      // Anchored on the description column, the name column is behind the
+      // block and can never be filled
+      const { payload, errors } = buildRowCreate(['description', 'sizeBp'], ['vector', '100']);
+      expect(payload).toBeNull();
+      expect(errors).toEqual(['needs a name to create a plasmid']);
+    });
+
+    it('refuses an empty name without doubling the explanation', () => {
+      const { payload, errors } = buildRowCreate(['name', 'sizeBp'], ['  ', '100']);
+      expect(payload).toBeNull();
+      expect(errors).toEqual(['name cannot be empty']);
+    });
+
+    it('keeps cell errors alongside a valid payload', () => {
+      const { payload, errors } = buildRowCreate(['name', 'status'], ['pNew', 'bogus']);
+      expect(payload).toEqual({ name: 'pNew' });
+      expect(errors).toHaveLength(1);
+      expect(errors[0]).toContain('bogus');
     });
   });
 });
