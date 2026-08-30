@@ -120,15 +120,21 @@ export function ImportSection(): JSX.Element {
   const allSelected = inspection !== null && selected.size === inspection.candidates.length;
 
   return (
-    <Card className="mt-6">
+    // Spacing belongs to the page's layout, not to this card
+    <Card>
       <CardHeader>
-        <CardTitle>Import from GMOCU v1</CardTitle>
+        <div className="flex items-center gap-2">
+          <CardTitle as="h3">GMOCU v1 database</CardTitle>
+          <span className="rounded bg-gray-500/15 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-gray-600 dark:text-gray-400">
+            One-time
+          </span>
+        </div>
       </CardHeader>
       <CardContent>
         <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
-          Select a legacy gmocu.db file. Plasmids that do not exist here yet can be imported with
-          their cassettes, GMOs, attachments and GenBank files; missing glossary entries they
-          reference are added automatically.
+          A legacy gmocu.db file, for moving off the old app. Plasmids that do not exist here yet
+          can be imported with their cassettes, GMOs, attachments and GenBank files; missing
+          glossary entries they reference are added automatically.
         </p>
 
         <input
