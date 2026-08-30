@@ -55,6 +55,26 @@ export class PlasmidRepository extends Repository<Plasmid> {
   }
 
   /**
+   * Fetch several plasmids by id in one query.
+   * Used where a per-id lookup would mean one query per label or per prep.
+   */
+  async listByIds(ids: string[]): Promise<Plasmid[]> {
+    this.logger.debug('PlasmidRepository.listByIds', { count: ids.length });
+
+    if (ids.length === 0) {
+      return [];
+    }
+
+    try {
+      const results = await this.qb(this.table).whereIn('id', ids).orderBy('name', 'asc');
+      return (results as Plasmid[]) || [];
+    } catch (error) {
+      this.logger.error('PlasmidRepository.listByIds failed', error as Error);
+      throw error;
+    }
+  }
+
+  /**
    * Search plasmids by name or description
    * Case-insensitive partial match
    */

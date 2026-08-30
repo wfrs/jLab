@@ -1,0 +1,116 @@
+/*
+ * Label sheet print styles.
+ *
+ * Imported only by /labels/print, so the `@page` rule — which is
+ * document-scoped wherever it is declared — never touches the rest of the app.
+ *
+ * Everything is in millimetres and points, matching the Word document the lab
+ * prints from today. The preview on screen is the same object as the paper.
+ */
+
+@page {
+  size: A4;
+  /* Zero here, because the sheet supplies its own 25.4 mm padding. Two sources
+     of margin would compound and shift the whole grid. */
+  margin: 0;
+}
+
+.label-page {
+  box-sizing: border-box;
+  background: #ffffff;
+  color: #000000;
+  /* Labels are printed on plain paper and cut out, so the sheet is always
+     white and black regardless of the app's dark theme. */
+  color-scheme: light;
+}
+
+.label-grid {
+  display: grid;
+  border-style: solid;
+  border-color: #000000;
+  border-right-width: 0;
+  border-bottom-width: 0;
+  /* Cell borders are the cut guides; the grid supplies the top and left edges
+     and each cell its right and bottom, so lines never double up. */
+
+  /* Hug the columns. A grid block stretches to its container by default, so the
+     top border would run the full 159.2 mm printable width while the four
+     35.56 mm columns reach only 142.24 mm — leaving a 17 mm rule sticking out
+     past the last label. */
+  width: fit-content;
+}
+
+.label-cell {
+  box-sizing: border-box;
+  border-style: solid;
+  border-color: #000000;
+  border-top-width: 0;
+  border-left-width: 0;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+}
+
+.label-content {
+  width: 100%;
+  max-height: 100%;
+  overflow: hidden;
+  /* Carlito is metric-compatible with Calibri, so a machine that has it lays
+     the text out exactly as Word did. Neither Aptos nor Calibri can be
+     redistributed, hence the fallback chain. */
+  font-family: Carlito, Calibri, 'Segoe UI', sans-serif;
+  line-height: 1.3;
+  letter-spacing: normal;
+}
+
+.label-line {
+  overflow-wrap: break-word;
+}
+
+.label-line-bold {
+  font-weight: 700;
+}
+
+.label-line-italic {
+  font-style: italic;
+}
+
+/* Screen preview: sheets sit on the app's canvas like paper on a desk */
+@media screen {
+  .label-preview {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1.5rem;
+    padding: 1.5rem 0 4rem;
+  }
+
+  .label-page {
+    box-shadow: 0 1px 3px rgb(0 0 0 / 40%);
+    outline: 1px solid #23252a;
+  }
+}
+
+@media print {
+  .label-preview {
+    display: block;
+    padding: 0;
+    gap: 0;
+  }
+
+  .label-page {
+    box-shadow: none;
+    outline: none;
+    break-after: page;
+    break-inside: avoid;
+  }
+
+  .label-page:last-child {
+    break-after: auto;
+  }
+
+  /* Anything the printer should not see */
+  .print-hidden {
+    display: none !important;
+  }
+}

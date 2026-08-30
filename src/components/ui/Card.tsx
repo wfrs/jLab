@@ -87,18 +87,25 @@ export function CardHeader({
 
 /**
  * CardTitle: Main heading in card header
+ *
+ * `as` exists because a card is not always the same depth: on a page whose
+ * cards sit directly under the <h1> an <h2> is right, but where they sit inside
+ * a titled section the section owns the <h2> and the card is an <h3>. Defaults
+ * to h2, so existing pages are unaffected.
  */
 export function CardTitle({
   className,
   children,
+  as: Heading = 'h2',
 }: {
   className?: string;
   children: React.ReactNode;
+  as?: 'h2' | 'h3';
 }): JSX.Element {
   return (
-    <h2 className={clsx('text-lg font-semibold text-gray-900 dark:text-gray-100', className)}>
+    <Heading className={clsx('text-lg font-semibold text-gray-900 dark:text-gray-100', className)}>
       {children}
-    </h2>
+    </Heading>
   );
 }
 

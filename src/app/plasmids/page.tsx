@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { Plasmid } from '@/domain/types';
 import { Table, TableColumn } from '@/components/ui/Table';
 import { Button } from '@/components/ui/Button';
@@ -27,6 +28,8 @@ import {
 } from '@/components/plasmids/api-client';
 import { PlasmidReadinessCell } from '@/components/plasmids/PlasmidReadinessCell';
 import type { PlasmidReadiness } from '@/services/data-quality.service';
+import { RecordPrepDialog } from '@/components/plasmids/RecordPrepDialog';
+import { listGlycerolStocks, stashLabelSelection } from '@/components/labels/api-client';
 
 /** Debounce for the search box (ms) */
 const SEARCH_DEBOUNCE_MS = 300;
@@ -46,6 +49,7 @@ const STATUS_OPTIONS = [
  * synced detail panel, create/delete (UI/UX direction, locked for v1).
  */
 export default function PlasmidsPage() {
+  const router = useRouter();
   const [plasmids, setPlasmids] = useState<Plasmid[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -58,6 +62,23 @@ export default function PlasmidsPage() {
   const [isCreating, setIsCreating] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [readiness, setReadiness] = useState<Map<string, PlasmidReadiness>>(new Map());
+  const [isPrepDialogOpen, setIsPrepDialogOpen] = useState(false);
+  const [operatorInitials, setOperatorInitials] = useState('');
+
+  // Initials are printed on every label, so the prep dialog opens pre-filled
+  // from Settings rather than asking again each session
+  useEffect(() => {
+    const loadInitials = async () => {
+      try {
+        const response = await fetch('/api/settings');
+        const json = (await response.json()) as { data?: { initials?: string } };
+        setOperatorInitials(json.data?.initials ?? '');
+      } catch {
+        // Advisory only — the dialog still lets the initials be typed
+      }
+    };
+    void loadInitials();
+  }, []);
 
   /**
    * Formblatt-Z readiness per row. Refreshed on mount and whenever an edit
@@ -246,6 +267,59 @@ export default function PlasmidsPage() {
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to duplicate plasmid');
     }
+  };
+
+  /**
+   * Print the selection. Accession order rather than selection order, because
+   * a cut-up sheet gets filed into boxes in accession order. The ids travel in
+   * sessionStorage: 400 UUIDs would overflow a query string.
+   */
+  const handlePrintLabels = () => {
+    const ids = sortedPlasmids.filter((p) => selectedRows.has(p.id)).map((p) => p.id);
+    if (ids.length === 0) {
+      return;
+    }
+    stashLabelSelection(ids);
+    // Same tab: a new one opened with noopener gets a fresh sessionStorage, and
+    // without noopener it keeps a handle on this page for no benefit. Back
+    // returns to the selection.
+    router.push(`/labels/print?kind=plasmid&n=${ids.length}`);
+  };
+
+  /**
+   * Print the glycerol stock labels for the selected plasmids. The stocks are
+   * resolved server-side rather than assumed: a plasmid may have an
+   * Agrobacterium stock, several, or none.
+   */
+  const handlePrintStockLabels = async () => {
+    const plasmidIds = sortedPlasmids.filter((p) => selectedRows.has(p.id)).map((p) => p.id);
+    if (plasmidIds.length === 0) {
+      return;
+    }
+    try {
+      const stocks = await listGlycerolStocks(plasmidIds);
+      if (stocks.length === 0) {
+        setNotice('None of the selected plasmids has a glycerol stock recorded.');
+        return;
+      }
+      stashLabelSelection(stocks.map((stock) => stock.id));
+      router.push(`/labels/print?kind=glycerol&n=${stocks.length}`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not load glycerol stocks');
+    }
+  };
+
+  /**
+   * Golden Gate dilutions for the selected plasmids. Sizes and concentrations
+   * are already recorded, so the parts sheet's retyping is unnecessary.
+   */
+  const handleGoldenGate = () => {
+    const ids = sortedPlasmids.filter((p) => selectedRows.has(p.id)).map((p) => p.id);
+    if (ids.length === 0) {
+      return;
+    }
+    stashLabelSelection(ids);
+    router.push(`/tools/golden-gate?n=${ids.length}`);
   };
 
   const handleDeleteSelected = async () => {
@@ -506,6 +580,18 @@ export default function PlasmidsPage() {
               <Button intent="secondary" size="sm" onClick={() => void handleCopySelected()}>
                 Copy
               </Button>
+              <Button intent="secondary" size="sm" onClick={() => setIsPrepDialogOpen(true)}>
+                Record prep
+              </Button>
+              <Button intent="secondary" size="sm" onClick={handlePrintLabels}>
+                Plasmid labels
+              </Button>
+              <Button intent="secondary" size="sm" onClick={() => void handlePrintStockLabels()}>
+                Stock labels
+              </Button>
+              <Button intent="secondary" size="sm" onClick={handleGoldenGate}>
+                Golden Gate
+              </Button>
               <Button intent="danger" size="sm" onClick={handleDeleteSelected} loading={isDeleting}>
                 Delete
               </Button>
@@ -513,6 +599,15 @@ export default function PlasmidsPage() {
           </div>
         )}
       </div>
+
+      {isPrepDialogOpen && (
+        <RecordPrepDialog
+          plasmids={sortedPlasmids.filter((p) => selectedRows.has(p.id))}
+          defaultInitials={operatorInitials}
+          onClose={() => setIsPrepDialogOpen(false)}
+          onRecorded={(count) => setNotice(`Recorded ${count} prep${count === 1 ? '' : 's'}.`)}
+        />
+      )}
 
       {/* Synced detail panel */}
       {activePlasmid && (

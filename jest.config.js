@@ -4,6 +4,8 @@ export default {
   testEnvironment: 'node',
   roots: ['<rootDir>/tests', '<rootDir>/src'],
   testMatch: ['**/__tests__/**/*.ts', '**/*.test.ts', '**/*.spec.ts'],
+  // Playwright owns tests/e2e; without this Jest claims them via '**/*.spec.ts'
+  testPathIgnorePatterns: ['/node_modules/', '<rootDir>/tests/e2e/'],
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/src/$1',
     '^@app/(.*)$': '<rootDir>/src/app/$1',

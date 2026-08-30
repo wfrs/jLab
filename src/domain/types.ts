@@ -8,15 +8,116 @@
  */
 export interface Plasmid {
   id: string;
+  /** Accession number, e.g. 'pJM0001'. The lab's permanent identifier. */
   name: string;
+  /**
+   * Everyday construct name, e.g. 'pMiso000' (legacy `alias`, spreadsheet
+   * `name`). Line 2 of both label types.
+   */
+  constructName?: string;
   description?: string;
   sizeBp?: number;
   parentId?: string;
   /** Original/backbone vector (legacy backbone_vector; Formblatt-Z "Ausgangsvektor") */
   backboneVector?: string;
   status: 'draft' | 'validated' | 'archived';
+
+  /** What was cloned in ('insert' is SQL-reserved, hence the suffix) */
+  insertName?: string;
+  insertSizeBp?: number;
+  /** EV | cassette | CDS | promoter | c-tag | terminator | binary | t-arm | addgene | … */
+  category?: string;
+  /** Normalized antibiotic resistance, e.g. 'Kan' or 'Gen + Rif' */
+  bacterialResistance?: string;
+  plantResistance?: string;
+  /** Freezer box number */
+  box?: number;
+  /** Free-text sequencing verdict and method, e.g. 'good; ONT' */
+  sequencingResult?: string;
+  /** ISO date */
+  sequencingDate?: string;
+  /** The lab's own note on the row */
+  comment?: string;
+  /** Secondary note column ('other comment' in the spreadsheet) */
+  notes?: string;
+
   createdAt: Date;
   updatedAt: Date;
+}
+
+/**
+ * PlasmidPrep - One preparation of a plasmid: when, by whom, at what
+ * concentration. A plasmid is re-prepped when its tube runs empty, so the
+ * newest prep is the current one and older rows are the audit trail.
+ *
+ * Recording the three values together is the point: the spreadsheet keeps one
+ * of each per plasmid and updating them by hand is three separate edits, which
+ * left pJM0055 holding an old date beside a new concentration.
+ */
+export interface PlasmidPrep {
+  id: string;
+  plasmidId: string;
+  /** ISO date the prep was made */
+  preppedOn: string;
+  /** Who made it — 'JM', 'INA', 'LN' */
+  operatorInitials: string;
+  /** Absent when prepped but not yet measured */
+  concentrationNgUl?: number;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+/**
+ * GlycerolStock - A frozen bacterial stock.
+ *
+ * E. coli stocks mirror plasmids one-to-one, with an ID derived from the
+ * plasmid number ('pJM0001' -> 'CJM1'). Agrobacterium stocks are numbered
+ * independently ('AJM1'), may carry no plasmid at all, and may be parallel
+ * aliquots of another stock ('AJM5.1'). Remaking a stock overwrites `madeOn`,
+ * matching how the lab keeps it.
+ */
+export interface GlycerolStock {
+  id: string;
+  /** Lab identifier: 'CJM1', 'AJM5.1' */
+  stockId: string;
+  /** Absent for strain-only stocks and those obtained from other people */
+  plasmidId?: string;
+  /** 'E. coli' | 'A. tumefaciens' | 'A. rhizogenes' */
+  organism: string;
+  /** 'TOP10' | 'GV3101 pMP90 (Goldbio)' — the source stays inside the string */
+  strain: string;
+  /** Construct name when no plasmid record backs the stock */
+  constructLabel?: string;
+  /** ISO date; absent means the number is reserved but the stock was never made */
+  madeOn?: string;
+  operatorInitials?: string;
+  /** Multi-valued for Agrobacterium, whose strains carry resistance already */
+  bacterialResistance?: string;
+  /** Set when the stock came from someone else, e.g. 'Tobi' */
+  externalSource?: string;
+  /**
+   * Where the strain itself came from, e.g. 'from Tübingen'. Printed on the
+   * label in place of a construct when the stock carries no plasmid.
+   */
+  sourceNote?: string;
+  /** 'AJM5.1' -> 'AJM5' */
+  parentStockId?: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+/**
+ * LabelPrint - Record of a label sheet jlab generated. The manual Word
+ * workflow kept no reliable record of what had been printed.
+ */
+export interface LabelPrint {
+  id: string;
+  kind: 'plasmid' | 'glycerol';
+  /** Plasmid id or glycerol stock id */
+  targetId: string;
+  /** ISO timestamp */
+  printedAt: string;
+  createdAt: Date;
 }
 
 /**

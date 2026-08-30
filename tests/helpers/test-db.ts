@@ -24,8 +24,56 @@ export async function createTestSchema(db: Knex): Promise<void> {
     table.text('parentId').nullable();
     table.text('backboneVector').nullable();
     table.enum('status', ['draft', 'validated', 'archived']).defaultTo('draft');
+    // Lab spreadsheet fields (docs/plans/label-printing.md §0.2)
+    table.text('constructName').nullable();
+    table.text('insertName').nullable();
+    table.integer('insertSizeBp').nullable();
+    table.text('category').nullable();
+    table.text('bacterialResistance').nullable();
+    table.text('plantResistance').nullable();
+    table.integer('box').nullable();
+    table.text('sequencingResult').nullable();
+    table.text('sequencingDate').nullable();
+    table.text('comment').nullable();
+    table.text('notes').nullable();
     table.dateTime('createdAt').notNullable();
     table.dateTime('updatedAt').notNullable();
+  });
+
+  await db.schema.createTableIfNotExists('plasmid_preps', (table) => {
+    table.text('id').primary();
+    table.text('plasmidId').notNullable();
+    table.text('preppedOn').notNullable();
+    table.text('operatorInitials').notNullable();
+    table.float('concentrationNgUl').nullable();
+    table.dateTime('createdAt').notNullable();
+    table.dateTime('updatedAt').notNullable();
+    table.foreign('plasmidId').references('plasmids.id').onDelete('CASCADE');
+  });
+
+  await db.schema.createTableIfNotExists('glycerol_stocks', (table) => {
+    table.text('id').primary();
+    table.text('stockId').notNullable().unique();
+    table.text('plasmidId').nullable();
+    table.text('organism').notNullable();
+    table.text('strain').notNullable();
+    table.text('constructLabel').nullable();
+    table.text('madeOn').nullable();
+    table.text('operatorInitials').nullable();
+    table.text('bacterialResistance').nullable();
+    table.text('externalSource').nullable();
+    table.text('sourceNote').nullable();
+    table.text('parentStockId').nullable();
+    table.dateTime('createdAt').notNullable();
+    table.dateTime('updatedAt').notNullable();
+  });
+
+  await db.schema.createTableIfNotExists('label_prints', (table) => {
+    table.text('id').primary();
+    table.enum('kind', ['plasmid', 'glycerol']).notNullable();
+    table.text('targetId').notNullable();
+    table.text('printedAt').notNullable();
+    table.dateTime('createdAt').notNullable();
   });
 
   await db.schema.createTableIfNotExists('cassettes', (table) => {
@@ -140,6 +188,17 @@ export async function createTestSchema(db: Knex): Promise<void> {
     table.string('updatedAt').notNullable();
   });
 
+  // Mirrors database-init.ts:227. Unused so far — single-user, no auth yet —
+  // but the reset's schema-coverage test compares against the real table list.
+  await db.schema.createTableIfNotExists('users', (table) => {
+    table.string('id').primary();
+    table.string('name').notNullable();
+    table.string('email').nullable().unique().index();
+    table.string('passwordHash').notNullable();
+    table.string('createdAt').notNullable();
+    table.string('updatedAt').notNullable();
+  });
+
   await db.schema.createTableIfNotExists('attachments', (table) => {
     table.string('id').primary();
     table.string('plasmidId').notNullable().index();
@@ -173,6 +232,9 @@ export async function createTestSchema(db: Knex): Promise<void> {
 
 /** Deletes all rows, child tables first (respects foreign keys) */
 export async function cleanTestDb(db: Knex): Promise<void> {
+  await db('label_prints').delete();
+  await db('glycerol_stocks').delete();
+  await db('plasmid_preps').delete();
   await db('project_plasmids').delete();
   await db('attachments').delete();
   await db('genbank_files').delete();

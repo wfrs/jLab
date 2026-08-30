@@ -148,8 +148,9 @@ describe('Data quality checks (Integration)', () => {
       expect(report.warningCount).toBe(0);
       expect(report.infoCount).toBe(0);
       expect(report.checks.every((c) => c.items.length === 0)).toBe(true);
-      // Every check is always present, passing ones included
-      expect(report.checks).toHaveLength(10);
+      // Every check is always present, passing ones included: 10 glossary and
+      // report checks, plus 7 from the lab spreadsheet and glycerol stocks.
+      expect(report.checks).toHaveLength(17);
     });
 
     it('is empty-database safe', async () => {
@@ -301,7 +302,7 @@ describe('Data quality checks (Integration)', () => {
 
       expect(response.status).toBe(200);
       expect(json.data.ok).toBe(true);
-      expect(json.data.checks).toHaveLength(10);
+      expect(json.data.checks).toHaveLength(17);
       expect(json.correlationId).toBeDefined();
     });
 

@@ -11,6 +11,8 @@ import React, { useEffect, useState } from 'react';
 import { Plasmid } from '@/domain/types';
 import { PlasmidStatusBadge } from './PlasmidStatusBadge';
 import { CassetteSection } from './CassetteSection';
+import { PrepHistorySection } from './PrepHistorySection';
+import { GlycerolStockSection } from './GlycerolStockSection';
 import { GmoSection } from './GmoSection';
 import { GenbankSection } from './GenbankSection';
 import { FeatureSection } from './FeatureSection';
@@ -308,6 +310,16 @@ export function PlasmidDetailPanel({
         {/* Remount only when switching rows; within a row, drafts follow
             server state via useSyncedDraft (keeps focus and Saved feedback) */}
         <PanelForm key={plasmid.id} plasmid={plasmid} onSave={onSave} />
+
+        {/* Preps sit first: it is the value that changes most often and the one
+            the label prints */}
+        <PrepHistorySection key={`preps-${plasmid.id}`} plasmidId={plasmid.id} />
+
+        <GlycerolStockSection
+          key={`stocks-${plasmid.id}`}
+          plasmidId={plasmid.id}
+          plasmidName={plasmid.name}
+        />
 
         <CassetteSection key={`cassettes-${plasmid.id}`} plasmidId={plasmid.id} />
 

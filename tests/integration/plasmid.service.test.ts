@@ -8,6 +8,7 @@ import { PlasmidService, CreatePlasmidInput } from '@services/plasmid.service';
 import { setQueryBuilder } from '@infrastructure/query-builder';
 import { Logger } from '@infrastructure/logger';
 import knex from 'knex';
+import { createTestSchema } from '../helpers/test-db';
 
 describe('PlasmidService (Integration)', () => {
   let service: PlasmidService;
@@ -27,125 +28,10 @@ describe('PlasmidService (Integration)', () => {
     // Set the query builder to use test database
     setQueryBuilder(db);
 
-    // Create schema
-    await db.schema.createTableIfNotExists('plasmids', (table: any) => {
-      table.text('id').primary();
-      table.text('name').notNullable();
-      table.text('description').nullable();
-      table.integer('sizeBp').nullable();
-      table.text('parentId').nullable();
-      table.enum('status', ['draft', 'validated', 'archived']).defaultTo('draft');
-      table.dateTime('createdAt').notNullable();
-      table.dateTime('updatedAt').notNullable();
-    });
-
-    await db.schema.createTableIfNotExists('cassettes', (table: any) => {
-      table.text('id').primary();
-      table.text('plasmidId').notNullable();
-      table.text('name').notNullable();
-      table.text('sequence').nullable();
-      table
-        .enum('type', ['promoter', 'terminator', 'marker', 'origin', 'resistance', 'other'])
-        .notNullable();
-      table.integer('position').notNullable().defaultTo(0);
-      table.dateTime('createdAt').notNullable();
-      table.dateTime('updatedAt').notNullable();
-      table.foreign('plasmidId').references('plasmids.id');
-    });
-
-    await db.schema.createTableIfNotExists('primers', (table: any) => {
-      table.text('id').primary();
-      table.text('plasmidId').notNullable();
-      table.text('name').notNullable();
-      table.text('sequence').notNullable();
-      table.decimal('tmCelsius', 5, 2).nullable();
-      table.decimal('gcPercent', 5, 2).nullable();
-      table.dateTime('createdAt').notNullable();
-      table.dateTime('updatedAt').notNullable();
-      table.foreign('plasmidId').references('plasmids.id');
-    });
-
-    await db.schema.createTableIfNotExists('features', (table: any) => {
-      table.text('id').primary();
-      table.text('plasmidId').notNullable();
-      table.text('name').notNullable();
-      table
-        .enum('type', ['gene', 'promoter', 'terminator', 'rbs', 'his_tag', 'flag_tag', 'other'])
-        .notNullable();
-      table.integer('startPos').notNullable();
-      table.integer('endPos').notNullable();
-      table.enum('strand', ['+', '-']).defaultTo('+');
-      table.dateTime('createdAt').notNullable();
-      table.dateTime('updatedAt').notNullable();
-      table.foreign('plasmidId').references('plasmids.id');
-    });
-
-    await db.schema.createTableIfNotExists('gmos', (table: any) => {
-      table.string('id').primary();
-      table.string('plasmidId').notNullable();
-      table.string('organismName').notNullable();
-      table.string('approval').notNullable().defaultTo('-');
-      table.integer('targetRiskGroup').notNullable().defaultTo(1);
-      table.string('dateGenerated').notNullable();
-      table.string('dateDestroyed').nullable();
-      table.string('entryDate').notNullable();
-      table.dateTime('createdAt').notNullable();
-      table.dateTime('updatedAt').notNullable();
-      table.foreign('plasmidId').references('plasmids.id');
-    });
-
-    await db.schema.createTableIfNotExists('attachments', (table: any) => {
-      table.string('id').primary();
-      table.string('plasmidId').notNullable();
-      table.string('filename').notNullable();
-      table.string('mimeType').notNullable().defaultTo('application/octet-stream');
-      table.integer('sizeBytes').notNullable();
-      table.binary('data').notNullable();
-      table.string('createdAt').notNullable();
-      table.string('updatedAt').notNullable();
-      table.foreign('plasmidId').references('plasmids.id');
-    });
-
-    await db.schema.createTableIfNotExists('genbank_files', (table: any) => {
-      table.string('plasmidId').primary();
-      table.string('filename').notNullable();
-      table.text('content').notNullable();
-      table.string('createdAt').notNullable();
-      table.string('updatedAt').notNullable();
-      table.foreign('plasmidId').references('plasmids.id');
-    });
-
-    await db.schema.createTableIfNotExists('integrations', (table: any) => {
-      table.text('id').primary();
-      table.text('plasmidId').notNullable();
-      table
-        .enum('type', ['google_drive', 'google_sheets', 'genbank', 'ice', 'filebrowser'])
-        .notNullable();
-      table.text('externalId').notNullable();
-      table.dateTime('lastSync').nullable();
-      table.enum('syncStatus', ['pending', 'synced', 'error']).defaultTo('pending');
-      table.text('errorMessage').nullable();
-      table.dateTime('createdAt').notNullable();
-      table.dateTime('updatedAt').notNullable();
-      table.foreign('plasmidId').references('plasmids.id');
-    });
-
-    await db.schema.createTableIfNotExists('project_plasmids', (table: any) => {
-      table.text('projectId').notNullable();
-      table.text('plasmidId').notNullable();
-      table.dateTime('addedAt').notNullable();
-      table.primary(['projectId', 'plasmidId']);
-      table.foreign('plasmidId').references('plasmids.id');
-    });
-
-    await db.schema.createTableIfNotExists('projects', (table: any) => {
-      table.text('id').primary();
-      table.text('name').notNullable();
-      table.text('description').nullable();
-      table.enum('status', ['active', 'archived']).defaultTo('active');
-      table.dateTime('createdAt').notNullable();
-      table.dateTime('updatedAt').notNullable();
-    });
+    // Shared schema helper rather than a second copy of the table list:
+    // this suite's own copy went stale when the label tables were added and
+    // silently broke deletePlasmid's cascade.
+    await createTestSchema(db);
 
     logger = new Logger();
   });

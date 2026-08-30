@@ -256,6 +256,20 @@ export class PlasmidService {
         await db('project_plasmids').where('plasmidId', id).delete();
         this.logger.debug('Deleted project associations', { plasmidId: id });
 
+        // Delete preps — a preparation has no meaning without its plasmid
+        await db('plasmid_preps').where('plasmidId', id).delete();
+        this.logger.debug('Deleted preps', { plasmidId: id });
+
+        // Delete this plasmid's label print history
+        await db('label_prints').where({ kind: 'plasmid', targetId: id }).delete();
+        this.logger.debug('Deleted label print history', { plasmidId: id });
+
+        // Glycerol stocks are kept and unlinked, not deleted: the tube is still
+        // in the freezer, and an Agrobacterium stock is numbered independently
+        // and may carry a strain that outlives any one plasmid record.
+        await db('glycerol_stocks').where('plasmidId', id).update({ plasmidId: null });
+        this.logger.debug('Unlinked glycerol stocks', { plasmidId: id });
+
         // Delete the plasmid itself
         await this.repository.delete(id);
 

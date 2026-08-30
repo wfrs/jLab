@@ -20,7 +20,9 @@
     "db:migrate": "knex migrate:latest",
     "db:rollback": "knex migrate:rollback",
     "db:seed": "tsx scripts/db-seed.ts",
-    "ci:local": "pwsh -File ./scripts/ci-local.ps1"
+    "ci:local": "pwsh -File ./scripts/ci-local.ps1",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui"
   },
   "dependencies": {
     "axios": "^1.6.0",
@@ -37,6 +39,7 @@
   },
   "devDependencies": {
     "@headlessui/react": "^1.7.17",
+    "@playwright/test": "^1.62.1",
     "@testing-library/jest-dom": "^6.1.5",
     "@testing-library/react": "^14.1.0",
     "@testing-library/user-event": "^14.5.1",
