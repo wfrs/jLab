@@ -7,6 +7,7 @@ import { ImportSection } from '@/components/settings/ImportSection';
 import { SpreadsheetImportSection } from '@/components/settings/SpreadsheetImportSection';
 import { DangerZoneSection } from '@/components/settings/DangerZoneSection';
 import { OrganismTargetsSection } from '@/components/settings/OrganismTargetsSection';
+import { DatabaseBackupSection } from '@/components/settings/DatabaseBackupSection';
 
 interface UpdateSettingsPayload {
   name?: string;
@@ -312,6 +313,7 @@ export default function SettingsPage() {
         <section className="flex flex-col gap-4">
           <SectionHeading>Data</SectionHeading>
           <div className="flex flex-col gap-6">
+            <DatabaseBackupSection />
             <SpreadsheetImportSection />
             <ImportSection />
           </div>

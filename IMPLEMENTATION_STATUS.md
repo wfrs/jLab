@@ -37,19 +37,20 @@
 - Settings danger zone (2026-08-29): DatabaseResetService (auto-backup via VACUUM INTO, transactional wipe of all data tables, settings preserved, VACUUM reclaim), type-to-confirm UI; Settings page reworked into sections (General / Organisms / Data / Danger zone)
 - Target + favourite organism lists (legacy OrganismSelection/OrganismFavourites, 2026-08-30): organism_targets table (favourite = starred target, so the legacy "favourites must exist in targets" guardrail is structural), OrganismTargetService + /api/settings/organism-targets, glossary rename/delete propagation, "Organisms" card on /settings, GMO picker leads with a Target organisms optgroup, batch-add favourites as GMOs (legacy -ADDFAV-) with live-GMO skip that resolves imported short names (AgTu) via the glossary
 - Bulk-create-on-paste + glossary grid navigation (2026-08-30, closes the follow-ups from table-ux-clipboard-keyboard.md): TSV rows pasted below the last plasmid row create new plasmids (buildRowCreate, name required, per-row errors, readiness refresh); both glossary tabs adopt the spreadsheet keyboard navigation (arrows/Home/End, Ctrl+C, Enter/Tab commit-move, Escape refocus)
-- 596 Jest tests passing (38 suites, unit + integration incl. API route tests via tests/helpers/test-db.ts) + 32 Playwright print-layout tests
-- Parity evidence: docs/plans/parity-evidence/ (plasmid-editable-table-autosave.md, cassette-layer.md, glossary-and-token-editor.md, organisms-and-gmos.md, formblatt-z-reports.md, rename-propagation.md, settings.md, attachments-genbank.md, plasmid-duplication.md, primers-features.md, table-ux-clipboard-keyboard.md, db-import.md, data-quality-checks.md, glossary-excel-import.md, database-reset.md, label-printing-phase-{0,1,2,3}.md, organism-target-lists.md, bulk-create-paste-glossary-nav.md)
+- Database backup download (2026-08-30, legacy offered backups only as prompts before risky operations, gmocu.py:1567): DatabaseResetService.downloadSnapshot (VACUUM INTO temp file → bytes → cleanup), GET /api/database/backup attachment (jlab-backup-YYYYMMDD-HHMMSS.db), Backup card atop Settings → Data with live DB size; verified live against the real 80.9 MB database (downloaded file reopens, counts match)
+- 601 Jest tests passing (39 suites, unit + integration incl. API route tests via tests/helpers/test-db.ts) + 32 Playwright print-layout tests
+- Parity evidence: docs/plans/parity-evidence/ (plasmid-editable-table-autosave.md, cassette-layer.md, glossary-and-token-editor.md, organisms-and-gmos.md, formblatt-z-reports.md, rename-propagation.md, settings.md, attachments-genbank.md, plasmid-duplication.md, primers-features.md, table-ux-clipboard-keyboard.md, db-import.md, data-quality-checks.md, glossary-excel-import.md, database-reset.md, label-printing-phase-{0,1,2,3}.md, organism-target-lists.md, bulk-create-paste-glossary-nav.md, database-backup.md)
 
-**Next candidates** (checked against docs/legacy-analysis/feature-inventory.md — the earlier list omitted three real parity gaps):
+**Roadmap complete (2026-08-30).** Every buildable item from docs/legacy-analysis/feature-inventory.md is done. The two remaining sections — Google Sheets glossary sync (§7) and ICE / Google Drive / Filebrowser publishing (§8) — were **scrapped by decision (Robin, 2026-08-30)**, which also retires their settings surface (credential profiles, sheet/folder IDs, the use_ice/use_filebrowser/use_gdrive/zip_files/upload_completed/autosync toggles) and the never-built Publish nav target.
 
-_Local, testable without credentials:_
+Still open, all blocked on lab input (see label-printing evidence docs):
 
-1. DB backup/export (complement to import; legacy offered a backup before importing — the danger zone's VACUUM INTO backup covers the reset path, but there is no user-facing "download a backup" yet)
+- Confirm keeping the Agrobacterium sheet's `Column1` as `sourceNote`
+- Confirm glycerol stocks surviving (unlinked) when their plasmid is deleted
+- Per-stock provenance data, if the `(Source; #N)` label line should print again
+- A subscript convention, before subscript rendering on labels can be built
 
-_Needs external credentials, so it cannot be verified autonomously:_
-
-2. Google Sheets glossary sync (inventory §7)
-3. ICE / Google Drive / Filebrowser publishing (inventory §8) — the one remaining nav target (Publish)
+Dormant v2 scaffolding with no UI (harmless, optional cleanup): `projects`/`project_plasmids` (a projects feature never designed), `users` (single-user, no auth), `integrations` (was for §8; obsolete now it is scrapped).
 
 ---
 

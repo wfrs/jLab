@@ -14,6 +14,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
+import { formatBytes } from '@/shared/format-bytes';
 
 const CONFIRMATION = 'DELETE ALL DATA';
 
@@ -52,19 +53,6 @@ const TABLE_LABELS: Record<string, string> = {
   integrations: 'Integrations',
   users: 'Users',
 };
-
-function formatBytes(bytes: number | null): string {
-  if (bytes === null) {
-    return 'unknown';
-  }
-  if (bytes < 1024) {
-    return `${bytes} B`;
-  }
-  if (bytes < 1024 * 1024) {
-    return `${(bytes / 1024).toFixed(1)} KB`;
-  }
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
 
 export function DangerZoneSection(): JSX.Element {
   const [preview, setPreview] = useState<ResetPreview | null>(null);

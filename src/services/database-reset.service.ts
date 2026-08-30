@@ -16,6 +16,9 @@
  */
 
 import { promises as fs } from 'fs';
+import { tmpdir } from 'os';
+import { basename, join } from 'path';
+import { randomUUID } from 'crypto';
 import { Knex } from 'knex';
 import { DomainError } from '@domain/types';
 import { Logger } from '@infrastructure/logger';
@@ -74,6 +77,13 @@ export interface ResetResult {
   backupSizeBytes: number;
   /** Bytes the file shrank by once the freed pages were reclaimed */
   reclaimedBytes: number;
+}
+
+export interface BackupSnapshot {
+  /** Download name, e.g. jlab-backup-20260830-114500.db */
+  filename: string;
+  sizeBytes: number;
+  bytes: Buffer;
 }
 
 export class DatabaseResetService {
@@ -141,11 +151,16 @@ export class DatabaseResetService {
    * GMOCU puts its own.
    */
   backupPathFor(databasePath: string, at: Date): string {
+    return `${databasePath}.backup-${this.timestamp(at)}`;
+  }
+
+  /** YYYYMMDD-HHMMSS, local time — sorts chronologically as a string */
+  private timestamp(at: Date): string {
     const pad = (value: number) => String(value).padStart(2, '0');
-    const stamp =
+    return (
       `${at.getFullYear()}${pad(at.getMonth() + 1)}${pad(at.getDate())}` +
-      `-${pad(at.getHours())}${pad(at.getMinutes())}${pad(at.getSeconds())}`;
-    return `${databasePath}.backup-${stamp}`;
+      `-${pad(at.getHours())}${pad(at.getMinutes())}${pad(at.getSeconds())}`
+    );
   }
 
   /**
@@ -180,6 +195,58 @@ export class DatabaseResetService {
       });
     }
     return size;
+  }
+
+  /**
+   * A consistent snapshot of the whole database for the user to download
+   * (Settings → Data). VACUUM INTO a temporary file, read it back, delete
+   * the temporary file.
+   *
+   * Legacy precedent: GMOCU offered "Shall we make a backup of the current
+   * database in the Download folder as gmocu_backup_{date}.db" before a DB
+   * import (gmocu.py:1567) — the same snapshot, handed to the user. Restoring
+   * is replacing the database file with the downloaded one.
+   */
+  async downloadSnapshot(): Promise<BackupSnapshot> {
+    const databasePath = this.databasePath();
+    if (!databasePath) {
+      throw new DomainError(
+        'VALIDATION',
+        'The database is in memory — there is no file to back up',
+        {}
+      );
+    }
+
+    // A unique name in the OS temp dir: VACUUM INTO refuses existing files,
+    // and this name never exists
+    const tempPath = join(tmpdir(), `jlab-snapshot-${randomUUID()}.db`);
+    this.logger.info('DatabaseResetService.downloadSnapshot', { tempPath });
+
+    try {
+      try {
+        await this.db().raw('VACUUM INTO ?', [tempPath]);
+      } catch (error) {
+        throw new DomainError('DATABASE', 'Could not write the backup snapshot', {
+          cause: error instanceof Error ? error.message : String(error),
+        });
+      }
+
+      const bytes = await fs.readFile(tempPath);
+      if (bytes.length === 0) {
+        throw new DomainError('DATABASE', 'Backup snapshot came out empty', {});
+      }
+
+      const base = basename(databasePath).replace(/\.db$/i, '') || 'jlab';
+      return {
+        filename: `${base}-backup-${this.timestamp(new Date())}.db`,
+        sizeBytes: bytes.length,
+        bytes,
+      };
+    } finally {
+      await fs.unlink(tempPath).catch(() => {
+        // Best effort — a stray file in the temp dir is the OS's to clean
+      });
+    }
   }
 
   /**
