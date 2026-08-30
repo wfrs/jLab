@@ -43,6 +43,7 @@ const TABLE_LABELS: Record<string, string> = {
   genbank_files: 'GenBank files',
   glossary_features: 'Glossary features',
   organisms: 'Glossary organisms',
+  organism_targets: 'Target organism list',
   plasmid_preps: 'Preps',
   glycerol_stocks: 'Glycerol stocks',
   label_prints: 'Label print history',

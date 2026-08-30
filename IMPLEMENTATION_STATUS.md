@@ -1,6 +1,6 @@
 # Implementation Status
 
-**Project Stage:** Phase 1 — Plasmid vertical slice complete ✅ (2026-08-27); v1 database import shipped (2026-08-29)
+**Project Stage:** Phase 1 — Plasmid vertical slice complete ✅ (2026-08-27); v1 database import shipped (2026-08-29); label printing + lab tools shipped (2026-08-29); target/favourite organism lists shipped (2026-08-30)
 
 ## Current State (read this first — sections below are historical)
 
@@ -33,21 +33,23 @@
 - Row-level Formblatt-Z readiness indicator (closes the last open locked UX requirement from ui-ux-direction.md): DataQualityService.plasmidReadiness returns ready/incomplete/blocked per plasmid with deduplicated reasons, GET /api/plasmids/readiness, "Formblatt Z" column in the plasmid table (dot + label, reasons as tooltip and accessible name); soft signal — rows stay editable; refreshed on mount, create/duplicate/delete, and detail-panel close
 - Glossary Excel import (legacy add_to_features/add_to_organisms): GlossaryExcelService + POST /api/glossary/import + "Import from Excel" card on /glossary; reads features and/or organisms sheets by name with a header sniff fallback (legacy read sheet 0 only, so its two-sheet template could never import organisms), normalizes annotations, maps blank/'None' risk to 'No Risk', skips existing and within-file duplicates with itemized reporting, one transaction; shared normalizeRisk/trimmedOrNull extracted to src/domain/glossary-normalization.ts and reused by the v1 DB importer. Verified against the real gmocu/example templates
 - Glossary Excel export (legacy -ALLEXCEL-/-USEDEXCEL- and organism equivalents): GET /api/glossary/export?entity=&scope=, four download links on the glossary card, legacy headers/portrait A4/footer/column widths via a generalized report-workbook builder; "used" resolved with cassetteBaseTokens (legacy split on "-" and missed [variant] tokens); exports re-import cleanly (header aliases accept both spellings)
-- 345 tests passing (unit + integration incl. API route tests via tests/helpers/test-db.ts)
-- Parity evidence: docs/plans/parity-evidence/ (plasmid-editable-table-autosave.md, cassette-layer.md, glossary-and-token-editor.md, organisms-and-gmos.md, formblatt-z-reports.md, rename-propagation.md, settings.md, attachments-genbank.md, plasmid-duplication.md, primers-features.md, table-ux-clipboard-keyboard.md, db-import.md)
+- Label printing (docs/plans/label-printing.md, phases 0-3 complete 2026-08-29): plasmid + glycerol stock label sheets reproducing the lab's Word templates from OOXML forensics (A4 grids, start-cell picker, auto-fit font steps, dense layouts), print history + reprint past sheets, plasmid_preps + glycerol_stocks tables with lab spreadsheet import, Golden Gate mix calculator (workbook-parity), prep recording dialog; Playwright print-pipeline suite (tests/e2e)
+- Settings danger zone (2026-08-29): DatabaseResetService (auto-backup via VACUUM INTO, transactional wipe of all data tables, settings preserved, VACUUM reclaim), type-to-confirm UI; Settings page reworked into sections (General / Organisms / Data / Danger zone)
+- Target + favourite organism lists (legacy OrganismSelection/OrganismFavourites, 2026-08-30): organism_targets table (favourite = starred target, so the legacy "favourites must exist in targets" guardrail is structural), OrganismTargetService + /api/settings/organism-targets, glossary rename/delete propagation, "Organisms" card on /settings, GMO picker leads with a Target organisms optgroup, batch-add favourites as GMOs (legacy -ADDFAV-) with live-GMO skip that resolves imported short names (AgTu) via the glossary
+- 590 Jest tests passing (38 suites, unit + integration incl. API route tests via tests/helpers/test-db.ts) + 32 Playwright print-layout tests
+- Parity evidence: docs/plans/parity-evidence/ (plasmid-editable-table-autosave.md, cassette-layer.md, glossary-and-token-editor.md, organisms-and-gmos.md, formblatt-z-reports.md, rename-propagation.md, settings.md, attachments-genbank.md, plasmid-duplication.md, primers-features.md, table-ux-clipboard-keyboard.md, db-import.md, data-quality-checks.md, glossary-excel-import.md, database-reset.md, label-printing-phase-{0,1,2,3}.md, organism-target-lists.md)
 
 **Next candidates** (checked against docs/legacy-analysis/feature-inventory.md — the earlier list omitted three real parity gaps):
 
 _Local, testable without credentials:_
 
-1. Target + favourite organism lists (inventory §6) — also unlocks batch-add GMOs from favourites (inventory §3 gap)
-2. Bulk-create-on-paste (rows below the table); glossary tables adopting the grid navigation
-3. DB backup/export (complement to import; legacy offered a backup before importing)
+1. Bulk-create-on-paste (rows below the table); glossary tables adopting the grid navigation
+2. DB backup/export (complement to import; legacy offered a backup before importing — the danger zone's VACUUM INTO backup covers the reset path, but there is no user-facing "download a backup" yet)
 
 _Needs external credentials, so it cannot be verified autonomously:_
 
-4. Google Sheets glossary sync (inventory §7)
-5. ICE / Google Drive / Filebrowser publishing (inventory §8) — the one remaining nav target (Publish)
+3. Google Sheets glossary sync (inventory §7)
+4. ICE / Google Drive / Filebrowser publishing (inventory §8) — the one remaining nav target (Publish)
 
 ---
 

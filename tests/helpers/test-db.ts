@@ -163,6 +163,14 @@ export async function createTestSchema(db: Knex): Promise<void> {
     table.string('updatedAt').notNullable();
   });
 
+  await db.schema.createTableIfNotExists('organism_targets', (table) => {
+    table.string('id').primary();
+    table.string('organismName').notNullable().unique().index();
+    table.boolean('favourite').notNullable().defaultTo(false);
+    table.string('createdAt').notNullable();
+    table.string('updatedAt').notNullable();
+  });
+
   await db.schema.createTableIfNotExists('gmos', (table) => {
     table.string('id').primary();
     table.string('plasmidId').notNullable().index();
@@ -246,6 +254,7 @@ export async function cleanTestDb(db: Knex): Promise<void> {
   await db('plasmids').delete();
   await db('projects').delete();
   await db('glossary_features').delete();
+  await db('organism_targets').delete();
   await db('organisms').delete();
   await db('settings').delete();
 }

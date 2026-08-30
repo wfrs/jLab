@@ -84,9 +84,9 @@ export class OrganismService {
   /**
    * Update an organism.
    * Renames propagate into name-linked records: a full-name change updates
-   * GMO records and glossary-feature organism references; a short-name
-   * change updates glossary-feature organism references (features link by
-   * short name in legacy data).
+   * GMO records, glossary-feature organism references and the target
+   * organism list; a short-name change updates glossary-feature organism
+   * references (features link by short name in legacy data).
    */
   async updateOrganism(id: string, updates: UpdateOrganismInput): Promise<Organism> {
     this.logger.info('OrganismService.updateOrganism', { id });
@@ -146,6 +146,31 @@ export class OrganismService {
             featuresUpdated += await trx('glossary_features')
               .where('organism', existing.fullName)
               .update({ organism: newFullName, updatedAt: now });
+
+            // Target list follows the rename. If the new name is somehow
+            // already targeted (rename onto a just-deleted-and-recreated
+            // organism), merge instead of violating the unique constraint:
+            // the surviving row keeps favourite if either row had it.
+            const oldTarget = (await trx('organism_targets')
+              .where('organismName', existing.fullName)
+              .first()) as { id: string; favourite: number | boolean } | undefined;
+            if (oldTarget) {
+              const clashTarget = (await trx('organism_targets')
+                .where('organismName', newFullName)
+                .first()) as { id: string; favourite: number | boolean } | undefined;
+              if (clashTarget) {
+                await trx('organism_targets').where('id', oldTarget.id).delete();
+                if (oldTarget.favourite && !clashTarget.favourite) {
+                  await trx('organism_targets')
+                    .where('id', clashTarget.id)
+                    .update({ favourite: true, updatedAt: now });
+                }
+              } else {
+                await trx('organism_targets')
+                  .where('id', oldTarget.id)
+                  .update({ organismName: newFullName, updatedAt: now });
+              }
+            }
           }
 
           if (shortNameChanged && existing.shortName && normalized.shortName) {
@@ -189,7 +214,9 @@ export class OrganismService {
   }
 
   /**
-   * Delete an organism
+   * Delete an organism.
+   * Its target-list entry (if any) goes with it — a target row naming a
+   * deleted organism could never be added as a GMO again.
    */
   async deleteOrganism(id: string): Promise<void> {
     this.logger.info('OrganismService.deleteOrganism', { id });
@@ -200,7 +227,11 @@ export class OrganismService {
     }
 
     try {
-      await this.repository.delete(id);
+      const db = getQueryBuilder();
+      await db.transaction(async (trx) => {
+        await trx('organism_targets').where('organismName', existing.fullName).delete();
+        await trx('organisms').where('id', id).delete();
+      });
       this.logger.info('OrganismService.deleteOrganism succeeded', { id });
     } catch (error) {
       this.logger.error('OrganismService.deleteOrganism failed', error as Error, { id });

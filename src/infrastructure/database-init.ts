@@ -160,6 +160,17 @@ export async function initializeDatabase(qb: Knex): Promise<void> {
       table.string('updatedAt').notNullable();
     });
 
+    // Target organism shortlist for GMO creation (legacy OrganismSelection);
+    // favourite=true marks the one-click batch-add set (legacy
+    // OrganismFavourites). Name-linked to the organism glossary, like gmos.
+    await createTableIfMissing(qb, 'organism_targets', (table) => {
+      table.string('id').primary();
+      table.string('organismName').notNullable().unique().index();
+      table.boolean('favourite').notNullable().defaultTo(false);
+      table.string('createdAt').notNullable();
+      table.string('updatedAt').notNullable();
+    });
+
     await createTableIfMissing(qb, 'gmos', (table) => {
       table.string('id').primary();
       table.string('plasmidId').notNullable().index();

@@ -37,6 +37,25 @@ export const updateOrganismSchema = z
   });
 
 /**
+ * POST /api/settings/organism-targets request body
+ */
+export const createOrganismTargetSchema = z
+  .object({
+    id: z.string().uuid().optional(),
+    organismName: z.string().trim().min(1, 'Organism is required').max(TEXT_FIELD_MAX_LENGTH),
+  })
+  .strict();
+
+/**
+ * PATCH /api/settings/organism-targets/[id] request body
+ */
+export const updateOrganismTargetSchema = z
+  .object({
+    favourite: z.boolean(),
+  })
+  .strict();
+
+/**
  * POST /api/plasmids/[id]/gmos request body
  * plasmidId comes from the URL, not the body.
  */
@@ -69,5 +88,7 @@ export const updateGmoSchema = z
 
 export type CreateOrganismRequest = z.infer<typeof createOrganismSchema>;
 export type UpdateOrganismRequest = z.infer<typeof updateOrganismSchema>;
+export type CreateOrganismTargetRequest = z.infer<typeof createOrganismTargetSchema>;
+export type UpdateOrganismTargetRequest = z.infer<typeof updateOrganismTargetSchema>;
 export type CreateGmoRequest = z.infer<typeof createGmoSchema>;
 export type UpdateGmoRequest = z.infer<typeof updateGmoSchema>;

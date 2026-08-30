@@ -186,6 +186,19 @@ export async function createGmo(plasmidId: string, payload: CreateGmoPayload): P
   return unwrap<Gmo>(response);
 }
 
+export interface AddFavouriteGmosResult {
+  created: Gmo[];
+  skipped: string[];
+}
+
+/** Add every favourite organism as a GMO (legacy -ADDFAV-) */
+export async function addFavouriteGmos(plasmidId: string): Promise<AddFavouriteGmosResult> {
+  const response = await fetch(`/api/plasmids/${encodeURIComponent(plasmidId)}/gmos/favourites`, {
+    method: 'POST',
+  });
+  return unwrap<AddFavouriteGmosResult>(response);
+}
+
 export async function updateGmo(id: string, patch: UpdateGmoPayload): Promise<Gmo> {
   const response = await fetch(`/api/gmos/${encodeURIComponent(id)}`, {
     method: 'PATCH',

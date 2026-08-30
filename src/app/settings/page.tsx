@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import { ImportSection } from '@/components/settings/ImportSection';
 import { SpreadsheetImportSection } from '@/components/settings/SpreadsheetImportSection';
 import { DangerZoneSection } from '@/components/settings/DangerZoneSection';
+import { OrganismTargetsSection } from '@/components/settings/OrganismTargetsSection';
 
 interface UpdateSettingsPayload {
   name?: string;
@@ -302,6 +303,11 @@ export default function SettingsPage() {
             </div>
           </section>
         )}
+
+        <section className="flex flex-col gap-4">
+          <SectionHeading>Organisms</SectionHeading>
+          <OrganismTargetsSection />
+        </section>
 
         <section className="flex flex-col gap-4">
           <SectionHeading>Data</SectionHeading>

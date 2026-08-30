@@ -11,8 +11,10 @@
 import { GmoRepository } from './gmo.repository';
 import { PlasmidRepository } from './plasmid.repository';
 import { OrganismRepository } from './organism.repository';
+import { OrganismTargetService } from './organism-target.service';
 import { Gmo, DomainError } from '@domain/types';
 import { Logger } from '@infrastructure/logger';
+import { randomUUID } from 'crypto';
 
 const DEFAULT_APPROVAL = '-';
 const DEFAULT_TARGET_RISK_GROUP = 1;
@@ -36,6 +38,12 @@ export interface UpdateGmoInput {
   dateDestroyed?: string | null;
 }
 
+export interface AddFavouritesResult {
+  created: Gmo[];
+  /** Favourites left alone because a live GMO for that organism already exists */
+  skipped: string[];
+}
+
 function todayIsoDate(): string {
   return new Date().toISOString().slice(0, 10);
 }
@@ -53,6 +61,7 @@ export class GmoService {
   private repository: GmoRepository;
   private plasmidRepository: PlasmidRepository;
   private organismRepository: OrganismRepository;
+  private organismTargetService: OrganismTargetService;
   private logger: Logger;
 
   constructor(logger?: Logger) {
@@ -60,6 +69,7 @@ export class GmoService {
     this.repository = new GmoRepository(this.logger);
     this.plasmidRepository = new PlasmidRepository(this.logger);
     this.organismRepository = new OrganismRepository(this.logger);
+    this.organismTargetService = new OrganismTargetService(this.logger);
   }
 
   /**
@@ -139,6 +149,67 @@ export class GmoService {
         cause: error instanceof Error ? error.message : String(error),
       });
     }
+  }
+
+  /**
+   * Add every favourite organism as a GMO on the plasmid (legacy -ADDFAV-,
+   * gmocu.py:2112). Each GMO gets the same defaults as a single add:
+   * approval '-', target RG seeded from the organism's glossary risk group,
+   * dates today.
+   *
+   * Deviation from legacy (which inserted unconditionally): a favourite whose
+   * organism already has a live (non-destroyed) GMO on this plasmid is
+   * skipped and reported — pressing the button twice must not double the
+   * GMO records. A destroyed GMO does not block; regenerating after
+   * destruction is a legitimate new record.
+   *
+   * Adds are sequential, not one transaction — legacy committed one GMO at a
+   * time too, and a mid-batch failure leaves the earlier records standing.
+   */
+  async addFavouritesAsGmos(plasmidId: string): Promise<AddFavouritesResult> {
+    this.logger.info('GmoService.addFavouritesAsGmos', { plasmidId });
+
+    const plasmid = await this.plasmidRepository.getById(plasmidId);
+    if (!plasmid) {
+      throw new DomainError('NOT_FOUND', `Plasmid not found: ${plasmidId}`, { plasmidId });
+    }
+
+    const favourites = await this.organismTargetService.listFavourites();
+    const existing = await this.repository.getByPlasmid(plasmidId);
+
+    // Imported v1 GMOs carry glossary short names (AgTu), jlab-created ones
+    // full names — resolve both to the glossary entry before comparing, with
+    // report.service's findOrganism semantics (exact short OR full name).
+    const organisms = await this.organismRepository.getAll();
+    const canonical = (name: string): string =>
+      organisms.find((o) => o.shortName === name || o.fullName === name)?.fullName ?? name;
+    const liveOrganisms = new Set(
+      existing.filter((gmo) => !gmo.dateDestroyed).map((gmo) => canonical(gmo.organismName))
+    );
+
+    const created: Gmo[] = [];
+    const skipped: string[] = [];
+    for (const favourite of favourites) {
+      if (liveOrganisms.has(canonical(favourite.organismName))) {
+        skipped.push(favourite.organismName);
+        continue;
+      }
+      created.push(
+        await this.createGmo({
+          id: randomUUID(),
+          plasmidId,
+          organismName: favourite.organismName,
+        })
+      );
+    }
+
+    this.logger.info('GmoService.addFavouritesAsGmos succeeded', {
+      plasmidId,
+      created: created.length,
+      skipped: skipped.length,
+    });
+
+    return { created, skipped };
   }
 
   /**

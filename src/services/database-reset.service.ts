@@ -42,6 +42,7 @@ export const RESET_TABLES = [
   'plasmids',
   'projects',
   'glossary_features',
+  'organism_targets',
   'organisms',
   'users',
 ] as const;

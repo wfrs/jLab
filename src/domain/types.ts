@@ -203,6 +203,22 @@ export interface Organism {
 }
 
 /**
+ * OrganismTarget - one entry in the target organism shortlist offered when
+ * adding GMOs (legacy OrganismSelection). A favourite target is additionally
+ * part of the one-click batch-add set (legacy OrganismFavourites); keeping
+ * both lists in one table makes "favourites must exist in Target organisms"
+ * (the legacy guardrail popup) structurally impossible to violate.
+ */
+export interface OrganismTarget {
+  id: string;
+  /** Glossary organism full name (legacy stored the short name) */
+  organismName: string;
+  favourite: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+/**
  * Gmo - Generated genetically modified organism record linked to a plasmid
  * (legacy GMOCU GMOs table). The display summary is derived from these
  * fields at render time (legacy stored it denormalized as GMO_summary).
