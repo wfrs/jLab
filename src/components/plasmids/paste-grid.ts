@@ -6,6 +6,7 @@
  */
 
 import { CreatePlasmidPayload, UpdatePlasmidPayload } from './api-client';
+import { splitCassetteContents } from './cassette-options';
 
 const STATUS_VALUES = ['draft', 'validated', 'archived'] as const;
 type StatusValue = (typeof STATUS_VALUES)[number];
@@ -28,6 +29,8 @@ export function normalizeStatus(raw: string): StatusValue | null {
 
 export interface RowPatchResult {
   patch: UpdatePlasmidPayload;
+  /** Cassette contents to add to the row (own records, not plasmid fields) */
+  cassettes: string[];
   errors: string[];
 }
 
@@ -38,6 +41,7 @@ export interface RowPatchResult {
  */
 export function buildRowPatch(columnIds: (string | null)[], cells: string[]): RowPatchResult {
   const patch: UpdatePlasmidPayload = {};
+  const cassettes: string[] = [];
   const errors: string[] = [];
 
   cells.forEach((raw, index) => {
@@ -81,18 +85,68 @@ export function buildRowPatch(columnIds: (string | null)[], cells: string[]): Ro
         }
         break;
       }
+      case 'insertSizeBp':
+      case 'box': {
+        const parsed = parseNumberCell(raw);
+        if (parsed === undefined) {
+          errors.push(`"${raw}" is not a number`);
+        } else {
+          patch[columnId] = parsed;
+        }
+        break;
+      }
+      case 'sequencingDate': {
+        const trimmed = raw.trim();
+        if (trimmed !== '' && !ISO_DATE_PATTERN.test(trimmed)) {
+          errors.push(`"${raw}" is not an ISO date (YYYY-MM-DD)`);
+        } else {
+          patch.sequencingDate = trimmed === '' ? null : trimmed;
+        }
+        break;
+      }
+      case 'cassettes':
+        cassettes.push(...splitCassetteContents(raw));
+        break;
+      case 'constructName':
+      case 'insertName':
+      case 'category':
+      case 'bacterialResistance':
+      case 'plantResistance':
+      case 'sequencingResult':
+      case 'comment':
+      case 'notes': {
+        // Lab text fields: an empty cell clears the stored value
+        const trimmed = raw.trim();
+        patch[columnId] = trimmed === '' ? null : trimmed;
+        break;
+      }
       default:
         // Not a pastable column
         break;
     }
   });
 
-  return { patch, errors };
+  return { patch, cassettes, errors };
+}
+
+const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+
+/** Empty clears (null); unparseable is undefined so the caller can report it */
+function parseNumberCell(raw: string): number | null | undefined {
+  const trimmed = raw.trim();
+  if (trimmed === '') {
+    return null;
+  }
+  // Tolerate thousands separators from spreadsheet exports (6,425)
+  const parsed = Number(trimmed.replace(/[\s,]/g, ''));
+  return Number.isFinite(parsed) ? parsed : undefined;
 }
 
 export interface RowCreateResult {
   /** Null when the row cannot become a plasmid (no name in an aligned cell) */
   payload: CreatePlasmidPayload | null;
+  /** Cassettes to add once the plasmid exists */
+  cassettes: string[];
   errors: string[];
 }
 
@@ -103,14 +157,14 @@ export interface RowCreateResult {
  * row cannot be created and says so.
  */
 export function buildRowCreate(columnIds: (string | null)[], cells: string[]): RowCreateResult {
-  const { patch, errors } = buildRowPatch(columnIds, cells);
+  const { patch, cassettes, errors } = buildRowPatch(columnIds, cells);
 
   if (!patch.name) {
     // A name error ("name cannot be empty") already explains itself
     if (!errors.some((message) => message.includes('name'))) {
       errors.push('needs a name to create a plasmid');
     }
-    return { payload: null, errors };
+    return { payload: null, cassettes, errors };
   }
 
   const payload: CreatePlasmidPayload = { name: patch.name };
@@ -119,5 +173,5 @@ export function buildRowCreate(columnIds: (string | null)[], cells: string[]): R
   if (typeof patch.sizeBp === 'number') payload.sizeBp = patch.sizeBp;
   if (patch.status !== undefined) payload.status = patch.status;
 
-  return { payload, errors };
+  return { payload, cassettes, errors };
 }

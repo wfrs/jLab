@@ -28,7 +28,26 @@ export interface TableProps<T> {
   loading?: boolean;
   emptyMessage?: string;
   striped?: boolean;
+  /**
+   * Extra classes for the scroll box. Give it a height (e.g. `h-full` in a
+   * sized flex parent) and the table scrolls inside it with its header
+   * pinned; without one the header pins only if the page is what scrolls.
+   */
+  className?: string;
+  /**
+   * Fixed layout: every column keeps its declared width and the table grows
+   * past the box to scroll sideways, instead of squeezing wide tables to fit.
+   */
+  fixedLayout?: boolean;
 }
+
+/**
+ * Header cells pin to the top of the scroll box. The hairline is an inset
+ * shadow rather than a border because collapsed borders scroll away with
+ * the body.
+ */
+const STICKY_HEADER_CELL =
+  'sticky top-0 z-10 shadow-[inset_0_-1px_0_0_theme(colors.gray.200)] dark:shadow-[inset_0_-1px_0_0_theme(colors.gray.700)]';
 
 /**
  * Table Header Cell
@@ -49,8 +68,9 @@ function TableHeaderCell<T>({
   return (
     <th
       className={clsx(
-        'px-4 py-3 text-left font-semibold text-gray-900 dark:text-gray-100',
-        'text-sm bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700',
+        STICKY_HEADER_CELL,
+        'px-4 py-3 text-left font-semibold text-gray-900 dark:text-gray-100 whitespace-nowrap',
+        'text-sm bg-gray-50 dark:bg-gray-800',
         isSortable && 'cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700'
       )}
       style={{ width: column.width }}
@@ -145,6 +165,8 @@ export const Table = React.forwardRef<HTMLTableElement, TableProps<any>>(
       loading,
       emptyMessage = 'No data available',
       striped = true,
+      className,
+      fixedLayout = false,
     },
     ref
   ) => {
@@ -160,14 +182,24 @@ export const Table = React.forwardRef<HTMLTableElement, TableProps<any>>(
     };
 
     return (
-      <div className="overflow-x-auto border border-gray-200 dark:border-gray-700 rounded-lg">
+      <div
+        className={clsx(
+          'overflow-auto border border-gray-200 dark:border-gray-700 rounded-lg',
+          className
+        )}
+      >
         <table
           ref={ref}
-          className="w-full text-sm text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-900"
+          className={clsx(
+            'text-sm text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-900',
+            fixedLayout ? 'table-fixed w-max min-w-full' : 'w-full'
+          )}
         >
           <thead className="bg-gray-50 dark:bg-gray-800">
             <tr>
-              <th className="px-4 py-3 w-12">
+              <th
+                className={clsx(STICKY_HEADER_CELL, 'px-4 py-3 w-12 bg-gray-50 dark:bg-gray-800')}
+              >
                 <input
                   type="checkbox"
                   className="w-4 h-4 cursor-pointer accent-blue-600"

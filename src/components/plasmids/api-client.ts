@@ -14,6 +14,7 @@ import {
   Primer,
 } from '@/domain/types';
 import type { PlasmidReadiness } from '@/services/data-quality.service';
+import { MAX_PAGE_SIZE } from '@/shared/pagination';
 
 export interface PlasmidListResult {
   data: Plasmid[];
@@ -37,6 +38,18 @@ export interface UpdatePlasmidPayload {
   parentId?: string | null;
   backboneVector?: string | null;
   status?: Plasmid['status'];
+  /** Lab spreadsheet fields; `null` clears each */
+  constructName?: string | null;
+  insertName?: string | null;
+  insertSizeBp?: number | null;
+  category?: string | null;
+  bacterialResistance?: string | null;
+  plantResistance?: string | null;
+  box?: number | null;
+  sequencingResult?: string | null;
+  sequencingDate?: string | null;
+  comment?: string | null;
+  notes?: string | null;
 }
 
 /** Error carrying the server's envelope message (e.g. validation failures) */
@@ -66,13 +79,38 @@ async function unwrap<T>(response: Response): Promise<T> {
   return (json as { data: T }).data;
 }
 
-export async function listPlasmids(search?: string): Promise<PlasmidListResult> {
+async function fetchPlasmidPage(
+  search: string | undefined,
+  offset: number
+): Promise<PlasmidListResult> {
   const url = new URL('/api/plasmids', window.location.origin);
   if (search) {
     url.searchParams.append('search', search);
   }
+  url.searchParams.append('limit', String(MAX_PAGE_SIZE));
+  url.searchParams.append('offset', String(offset));
   const response = await fetch(url.toString());
   return unwrap<PlasmidListResult>(response);
+}
+
+/**
+ * The whole library, like the legacy GMOCU table. The API serves at most
+ * MAX_PAGE_SIZE rows per request, so the first page's `total` decides how
+ * many further pages to fetch; those are requested concurrently.
+ */
+export async function listPlasmids(search?: string): Promise<PlasmidListResult> {
+  const first = await fetchPlasmidPage(search, 0);
+  const remainingOffsets: number[] = [];
+  for (let offset = first.data.length; offset < first.total; offset += MAX_PAGE_SIZE) {
+    remainingOffsets.push(offset);
+  }
+  const rest =
+    first.data.length === 0
+      ? []
+      : await Promise.all(remainingOffsets.map((offset) => fetchPlasmidPage(search, offset)));
+
+  const data = [first, ...rest].flatMap((page) => page.data);
+  return { data, total: first.total, limit: data.length, offset: 0 };
 }
 
 export async function createPlasmid(payload: CreatePlasmidPayload): Promise<Plasmid> {
@@ -121,6 +159,12 @@ export interface UpdateCassettePayload {
   type?: Cassette['type'];
   sequence?: string | null;
   position?: number;
+}
+
+/** Every cassette in the library, for the table's Cassettes column and picker */
+export async function listAllCassettes(): Promise<Cassette[]> {
+  const response = await fetch('/api/cassettes');
+  return unwrap<Cassette[]>(response);
 }
 
 export async function listCassettes(plasmidId: string): Promise<Cassette[]> {

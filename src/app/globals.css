@@ -4,6 +4,12 @@
 @tailwind components;
 @tailwind utilities;
 
+/* The sticky top nav's height; anything else that sticks to the viewport
+   top (detail panel, print toolbar) offsets by it so the nav never covers it */
+:root {
+  --app-nav-height: 3rem;
+}
+
 /* Reset and base styles */
 * {
   @apply m-0 p-0 box-border;
@@ -13,9 +19,15 @@ html {
   @apply scroll-smooth;
 }
 
+html {
+  @apply h-full;
+}
+
+/* min-h, not h: a sticky nav can only stick within its parent's box, so
+   body must grow with the page rather than stop at the viewport height */
 html,
 body {
-  @apply h-full w-full;
+  @apply min-h-full w-full;
   @apply bg-white dark:bg-gray-950;
   @apply text-gray-900 dark:text-gray-100;
   /* Linear voice: Inter (via next/font) with the documented SF Pro/system fallback */

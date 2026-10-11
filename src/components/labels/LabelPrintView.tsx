@@ -145,7 +145,7 @@ export function LabelPrintView() {
 
   return (
     <div className="min-h-screen bg-gray-950">
-      <div className="print-hidden sticky top-0 z-10 border-b border-gray-800 bg-gray-950/95 backdrop-blur">
+      <div className="print-hidden sticky top-[var(--app-nav-height)] z-10 border-b border-gray-800 bg-gray-950/95 backdrop-blur">
         <div className="mx-auto flex max-w-5xl flex-wrap items-center gap-4 px-6 py-3">
           <div className="flex-1 min-w-[16rem]">
             <p className="text-sm font-medium text-gray-100">

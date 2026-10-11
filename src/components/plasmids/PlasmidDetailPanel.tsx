@@ -279,7 +279,7 @@ export function PlasmidDetailPanel({
   return (
     <aside
       aria-label={`Details for plasmid ${plasmid.name}`}
-      className="w-[360px] shrink-0 border-l border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 dark:panel-lift overflow-y-auto"
+      className="w-[360px] shrink-0 overflow-y-auto border-l border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 dark:panel-lift"
     >
       <div className="p-5 flex flex-col gap-5">
         <div className="flex items-start justify-between gap-2">

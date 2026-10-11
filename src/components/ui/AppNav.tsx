@@ -23,7 +23,7 @@ export function AppNav(): JSX.Element {
   return (
     // print:hidden keeps the app chrome off the paper — /labels/print renders
     // sheets at exact A4 millimetres and the nav would shift the first one down
-    <header className="h-12 shrink-0 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-950 flex items-center px-6 gap-6 print:hidden">
+    <header className="sticky top-0 z-30 h-[var(--app-nav-height)] shrink-0 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-950 flex items-center px-6 gap-6 print:hidden">
       <Link
         href="/plasmids"
         className="text-sm font-bold tracking-tight text-gray-900 dark:text-gray-100"

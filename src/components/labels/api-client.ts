@@ -120,6 +120,13 @@ export async function recordPrepBatch(input: {
   return preps;
 }
 
+/** The current prep of every prepped plasmid, for the plasmid table */
+export async function listLatestPreps(): Promise<PlasmidPrep[]> {
+  const response = await fetch('/api/plasmids/preps');
+  const { preps } = await unwrap<{ preps: PlasmidPrep[] }>(response);
+  return preps;
+}
+
 export async function fetchPrepHistory(plasmidId: string): Promise<PlasmidPrep[]> {
   const response = await fetch(`/api/plasmids/${plasmidId}/preps`);
   const { preps } = await unwrap<{ preps: PlasmidPrep[] }>(response);
@@ -152,6 +159,13 @@ export async function listGlycerolStocks(plasmidIds: string[]): Promise<Glycerol
   const response = await fetch(
     `/api/glycerol-stocks?plasmidIds=${encodeURIComponent(plasmidIds.join(','))}`
   );
+  const { stocks } = await unwrap<{ stocks: GlycerolStock[] }>(response);
+  return stocks;
+}
+
+/** Every stock in the freezer, for the plasmid table's stock columns */
+export async function listAllGlycerolStocks(): Promise<GlycerolStock[]> {
+  const response = await fetch('/api/glycerol-stocks');
   const { stocks } = await unwrap<{ stocks: GlycerolStock[] }>(response);
   return stocks;
 }

@@ -1,8 +1,8 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Plasmid } from '@/domain/types';
+import { Cassette, GlycerolStock, Plasmid, PlasmidPrep } from '@/domain/types';
 import { Table, TableColumn } from '@/components/ui/Table';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -18,18 +18,44 @@ import { buildRowCreate, buildRowPatch, parsePasteText } from '@/components/plas
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import { PlasmidDetailPanel } from '@/components/plasmids/PlasmidDetailPanel';
 import {
+  createCassette,
   createPlasmid,
+  deleteCassette,
   deletePlasmid,
   duplicatePlasmid,
   fetchPlasmidReadiness,
+  listAllCassettes,
   listPlasmids,
+  updateCassette,
   updatePlasmid,
   UpdatePlasmidPayload,
 } from '@/components/plasmids/api-client';
 import { PlasmidReadinessCell } from '@/components/plasmids/PlasmidReadinessCell';
 import type { PlasmidReadiness } from '@/services/data-quality.service';
 import { RecordPrepDialog } from '@/components/plasmids/RecordPrepDialog';
-import { listGlycerolStocks, stashLabelSelection } from '@/components/labels/api-client';
+import { ColumnPicker } from '@/components/plasmids/ColumnPicker';
+import { CassetteCell } from '@/components/plasmids/CassetteCell';
+import {
+  CassetteOption,
+  cassetteOptions,
+  groupCassettesByPlasmid,
+  joinCassetteContents,
+} from '@/components/plasmids/cassette-options';
+import { listGlossaryFeatures } from '@/components/glossary/api-client';
+import {
+  loadVisibleColumns,
+  normalizeColumnIds,
+  PLASMID_COLUMNS,
+  PlasmidColumnId,
+  primaryStockByPlasmid,
+  saveVisibleColumns,
+} from '@/components/plasmids/plasmid-columns';
+import {
+  listAllGlycerolStocks,
+  listGlycerolStocks,
+  listLatestPreps,
+  stashLabelSelection,
+} from '@/components/labels/api-client';
 
 /** Debounce for the search box (ms) */
 const SEARCH_DEBOUNCE_MS = 300;
@@ -42,6 +68,33 @@ const STATUS_OPTIONS = [
   { value: 'validated', label: 'Validated' },
   { value: 'archived', label: 'Archived' },
 ];
+
+/** Nullable free-text plasmid fields edited inline; an emptied cell clears them */
+type LabTextField =
+  | 'constructName'
+  | 'insertName'
+  | 'category'
+  | 'bacterialResistance'
+  | 'plantResistance'
+  | 'sequencingResult'
+  | 'sequencingDate'
+  | 'comment'
+  | 'notes'
+  | 'backboneVector';
+
+type SortValue = string | number | null | undefined;
+
+const COLUMN_LABEL = Object.fromEntries(
+  PLASMID_COLUMNS.map((column) => [column.id, column.label])
+) as Record<PlasmidColumnId, string>;
+
+/** Read-only cell for values that live on another record (prep, stock) */
+function DerivedCell({ value }: { value: string | number | null | undefined }): JSX.Element {
+  if (value === null || value === undefined || value === '') {
+    return <span className="text-gray-400 dark:text-gray-500">—</span>;
+  }
+  return <span>{String(value)}</span>;
+}
 
 /**
  * Plasmids Page
@@ -64,6 +117,59 @@ export default function PlasmidsPage() {
   const [readiness, setReadiness] = useState<Map<string, PlasmidReadiness>>(new Map());
   const [isPrepDialogOpen, setIsPrepDialogOpen] = useState(false);
   const [operatorInitials, setOperatorInitials] = useState('');
+  const [visibleColumns, setVisibleColumns] = useState<PlasmidColumnId[]>(() =>
+    normalizeColumnIds(PLASMID_COLUMNS.filter((c) => c.defaultVisible).map((c) => c.id))
+  );
+  const [latestPreps, setLatestPreps] = useState<Map<string, PlasmidPrep>>(new Map());
+  const [stocksByPlasmid, setStocksByPlasmid] = useState<Map<string, GlycerolStock>>(new Map());
+  const [cassettesByPlasmid, setCassettesByPlasmid] = useState<Map<string, Cassette[]>>(new Map());
+  const [cassetteChoices, setCassetteChoices] = useState<CassetteOption[]>([]);
+  const [annotations, setAnnotations] = useState<Set<string>>(new Set());
+
+  // Glossary annotations flag unknown features in cassette chips and options
+  useEffect(() => {
+    listGlossaryFeatures()
+      .then((features) => setAnnotations(new Set(features.map((f) => f.annotation))))
+      .catch(() => setAnnotations(new Set()));
+  }, []);
+
+  // The column choice is a per-browser preference; read after mount so the
+  // server render and the first client render agree
+  useEffect(() => {
+    setVisibleColumns(loadVisibleColumns(window.localStorage));
+  }, []);
+
+  const changeVisibleColumns = (next: PlasmidColumnId[]) => {
+    const normalized = normalizeColumnIds(next);
+    setVisibleColumns(normalized);
+    saveVisibleColumns(window.localStorage, normalized);
+  };
+
+  /**
+   * Prep, glycerol stock and cassette columns come from their own records.
+   * Loaded on mount and again when something that writes them finishes (the
+   * prep dialog, the detail panel with its stock and cassette sections, the
+   * table's own cassette picker).
+   */
+  const refreshDerivedColumns = useCallback(async () => {
+    try {
+      const [preps, stocks, cassettes] = await Promise.all([
+        listLatestPreps(),
+        listAllGlycerolStocks(),
+        listAllCassettes(),
+      ]);
+      setLatestPreps(new Map(preps.map((prep) => [prep.plasmidId, prep])));
+      setStocksByPlasmid(primaryStockByPlasmid(stocks));
+      setCassettesByPlasmid(groupCassettesByPlasmid(cassettes));
+      setCassetteChoices(cassetteOptions(cassettes));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not load prep and stock columns');
+    }
+  }, []);
+
+  useEffect(() => {
+    void refreshDerivedColumns();
+  }, [refreshDerivedColumns]);
 
   // Initials are printed on every label, so the prep dialog opens pre-filled
   // from Settings rather than asking again each session
@@ -197,6 +303,25 @@ export default function PlasmidsPage() {
     let cellsApplied = 0;
     let rowsTouched = 0;
     let overflow = 0;
+    let cassettesAdded = 0;
+
+    /** Pasted cassette contents become cassette records; returns how many landed */
+    const addPastedCassettes = async (
+      plasmidId: string,
+      rowLabel: string,
+      contents: string[]
+    ): Promise<number> => {
+      let added = 0;
+      for (const content of contents) {
+        try {
+          await createCassette(plasmidId, { name: content, type: 'other' });
+          added += 1;
+        } catch (err) {
+          failures.push(`${rowLabel}: ${err instanceof Error ? err.message : 'cassette failed'}`);
+        }
+      }
+      return added;
+    };
 
     // Overflow rows have no row element to read columns from; every row
     // shares the anchor row's layout, so align against that once.
@@ -216,12 +341,17 @@ export default function PlasmidsPage() {
 
       if (!row) {
         // Below the table: this row becomes a new plasmid
-        const { payload, errors } = buildRowCreate(columnIdsFor(anchorRowCells, grid[r]), grid[r]);
+        const { payload, cassettes, errors } = buildRowCreate(
+          columnIdsFor(anchorRowCells, grid[r]),
+          grid[r]
+        );
         const rowLabel = payload?.name ?? `pasted row ${r + 1}`;
         errors.forEach((message) => failures.push(`${rowLabel}: ${message}`));
         if (payload) {
           try {
-            createdRows.push(await createPlasmid(payload));
+            const created = await createPlasmid(payload);
+            createdRows.push(created);
+            cassettesAdded += await addPastedCassettes(created.id, rowLabel, cassettes);
           } catch (err) {
             failures.push(`${rowLabel}: ${err instanceof Error ? err.message : 'create failed'}`);
           }
@@ -232,25 +362,39 @@ export default function PlasmidsPage() {
       const id = row.getAttribute('data-row-key');
       if (!id) continue;
 
-      const { patch, errors } = buildRowPatch(columnIdsFor(cellsOfRow(row), grid[r]), grid[r]);
+      const { patch, cassettes, errors } = buildRowPatch(
+        columnIdsFor(cellsOfRow(row), grid[r]),
+        grid[r]
+      );
       const rowName = plasmids.find((p) => p.id === id)?.name ?? id;
       errors.forEach((message) => failures.push(`${rowName}: ${message}`));
 
+      let rowChanged = false;
       if (Object.keys(patch).length > 0) {
         try {
           await saveField(id, patch);
           cellsApplied += Object.keys(patch).length;
-          rowsTouched += 1;
+          rowChanged = true;
         } catch (err) {
           failures.push(`${rowName}: ${err instanceof Error ? err.message : 'save failed'}`);
         }
       }
+      const added = await addPastedCassettes(id, rowName, cassettes);
+      if (added > 0) {
+        cassettesAdded += added;
+        cellsApplied += 1;
+        rowChanged = true;
+      }
+      if (rowChanged) rowsTouched += 1;
     }
 
     if (createdRows.length > 0) {
       // They were pasted below the table, so that is where they appear
       setPlasmids((prev) => [...prev, ...createdRows]);
       void refreshReadiness();
+    }
+    if (cassettesAdded > 0) {
+      afterCassetteChange();
     }
 
     const summary: string[] = [];
@@ -385,87 +529,237 @@ export default function PlasmidsPage() {
     setIsDeleting(false);
   };
 
-  // Sort plasmids (client-side)
+  /** What a column sorts by; derived columns read their own record */
+  const sortValueOf = useCallback(
+    (plasmid: Plasmid, columnId: string): SortValue => {
+      switch (columnId as PlasmidColumnId) {
+        case 'prepConcentration':
+          return latestPreps.get(plasmid.id)?.concentrationNgUl;
+        case 'prepDate':
+          return latestPreps.get(plasmid.id)?.preppedOn;
+        case 'stockId':
+          return stocksByPlasmid.get(plasmid.id)?.stockId;
+        case 'stockMadeOn':
+          return stocksByPlasmid.get(plasmid.id)?.madeOn;
+        case 'stockOrganism':
+          return stocksByPlasmid.get(plasmid.id)?.organism;
+        case 'stockStrain':
+          return stocksByPlasmid.get(plasmid.id)?.strain;
+        case 'cassettes':
+          return joinCassetteContents(cassettesByPlasmid.get(plasmid.id) ?? []);
+        case 'readiness':
+          return readiness.get(plasmid.id)?.level;
+        default: {
+          const value = plasmid[columnId as keyof Plasmid];
+          return typeof value === 'string' || typeof value === 'number' ? value : null;
+        }
+      }
+    },
+    [latestPreps, stocksByPlasmid, cassettesByPlasmid, readiness]
+  );
+
+  // Sort plasmids (client-side); empty values sort last in either direction
   const sortedPlasmids = useMemo(() => {
     if (!sortedBy) return plasmids;
+    const sign = sortDirection === 'asc' ? 1 : -1;
     return [...plasmids].sort((a, b) => {
-      const aVal = a[sortedBy as keyof Plasmid];
-      const bVal = b[sortedBy as keyof Plasmid];
-
-      if (typeof aVal === 'string' && typeof bVal === 'string') {
-        return sortDirection === 'asc' ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
+      const aVal = sortValueOf(a, sortedBy);
+      const bVal = sortValueOf(b, sortedBy);
+      const aEmpty = aVal === null || aVal === undefined || aVal === '';
+      const bEmpty = bVal === null || bVal === undefined || bVal === '';
+      if (aEmpty || bEmpty) {
+        return aEmpty === bEmpty ? 0 : aEmpty ? 1 : -1;
       }
       if (typeof aVal === 'number' && typeof bVal === 'number') {
-        return sortDirection === 'asc' ? aVal - bVal : bVal - aVal;
+        return sign * (aVal - bVal);
       }
-      return 0;
+      return sign * String(aVal).localeCompare(String(bVal));
     });
-  }, [plasmids, sortedBy, sortDirection]);
+  }, [plasmids, sortedBy, sortDirection, sortValueOf]);
 
   const activePlasmid = activeId ? plasmids.find((p) => p.id === activeId) || null : null;
 
-  // Table columns — editable cells commit through saveField (autosave)
-  const columns: TableColumn<Plasmid>[] = [
-    {
-      id: 'name',
-      label: 'Name',
-      sortable: true,
-      width: '200px',
-      render: (plasmid) => (
+  /**
+   * Cassette edits from the table. Cassettes are their own records, so the
+   * row is not patched; the derived columns and readiness (cassette tokens
+   * feed Formblatt Z) reload afterwards. Errors rethrow so the picker can
+   * show them inline.
+   */
+  const afterCassetteChange = useCallback(() => {
+    void refreshDerivedColumns();
+    void refreshReadiness();
+  }, [refreshDerivedColumns, refreshReadiness]);
+
+  const addCassette = async (plasmidId: string, content: string) => {
+    try {
+      await createCassette(plasmidId, { name: content, type: 'other' });
+      setError(null);
+      afterCassetteChange();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to add cassette');
+      throw err;
+    }
+  };
+
+  const replaceCassette = async (cassette: Cassette, content: string) => {
+    try {
+      await updateCassette(cassette.id, { name: content });
+      setError(null);
+      afterCassetteChange();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to change cassette');
+      throw err;
+    }
+  };
+
+  const removeCassette = async (cassette: Cassette) => {
+    if (!window.confirm(`Delete cassette "${cassette.name}"? This cannot be undone.`)) return;
+    try {
+      await deleteCassette(cassette.id);
+      setError(null);
+      afterCassetteChange();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to delete cassette');
+    }
+  };
+
+  // Table columns — editable cells commit through saveField (autosave).
+  // Every catalogue column is defined; the ColumnPicker chooses which show.
+  const textCell = (plasmid: Plasmid, field: LabTextField, mono = false) => (
+    <EditableCell
+      value={plasmid[field] ?? null}
+      colId={field}
+      mono={mono}
+      onNavigate={handleCellNavigate}
+      ariaLabel={`${COLUMN_LABEL[field]} of ${plasmid.name}`}
+      onCommit={(value: EditableCellValue) => {
+        const text = value === null ? '' : String(value).trim();
+        return saveField(plasmid.id, { [field]: text === '' ? null : text });
+      }}
+    />
+  );
+
+  const numberCell = (plasmid: Plasmid, field: 'insertSizeBp' | 'box') => (
+    <EditableCell
+      value={plasmid[field] ?? null}
+      type="number"
+      mono
+      colId={field}
+      onNavigate={handleCellNavigate}
+      ariaLabel={`${COLUMN_LABEL[field]} of ${plasmid.name}`}
+      onCommit={(value: EditableCellValue) =>
+        saveField(plasmid.id, { [field]: value === null ? null : Number(value) })
+      }
+    />
+  );
+
+  const column = (
+    id: PlasmidColumnId,
+    render: (plasmid: Plasmid) => React.ReactNode,
+    options: { sortable?: boolean; width?: string } = {}
+  ): TableColumn<Plasmid> => ({
+    id,
+    label: COLUMN_LABEL[id],
+    sortable: options.sortable ?? true,
+    ...(options.width && { width: options.width }),
+    render,
+  });
+
+  const columnDefs: Record<PlasmidColumnId, TableColumn<Plasmid>> = {
+    name: column(
+      'name',
+      (plasmid) => (
         <EditableCell
           value={plasmid.name}
           colId="name"
           onNavigate={handleCellNavigate}
-          ariaLabel={`Name of ${plasmid.name}`}
+          ariaLabel={`ID of ${plasmid.name}`}
           onCommit={(value: EditableCellValue) =>
             saveField(plasmid.id, { name: String(value ?? '') })
           }
           format={(value) => <span className="font-medium">{String(value)}</span>}
         />
       ),
-    },
-    {
-      id: 'description',
-      label: 'Description',
-      sortable: false,
-      render: (plasmid) => (
+      { width: '140px' }
+    ),
+    constructName: column('constructName', (p) => textCell(p, 'constructName'), {
+      width: '160px',
+    }),
+    insertName: column('insertName', (p) => textCell(p, 'insertName'), { width: '160px' }),
+    description: column(
+      'description',
+      (plasmid) => (
         <EditableCell
           value={plasmid.description ?? null}
           colId="description"
           onNavigate={handleCellNavigate}
-          ariaLabel={`Description of ${plasmid.name}`}
+          ariaLabel={`Details of ${plasmid.name}`}
           onCommit={(value: EditableCellValue) =>
             saveField(plasmid.id, { description: String(value ?? '') })
           }
         />
       ),
-    },
-    {
-      id: 'sizeBp',
-      label: 'Size (bp)',
-      sortable: true,
-      width: '120px',
-      render: (plasmid) => (
-        <EditableCell
-          value={plasmid.sizeBp ?? null}
-          type="number"
-          mono
-          colId="sizeBp"
-          onNavigate={handleCellNavigate}
-          ariaLabel={`Size of ${plasmid.name} in base pairs`}
-          onCommit={(value: EditableCellValue) =>
-            saveField(plasmid.id, { sizeBp: value === null ? null : Number(value) })
-          }
-          format={(value) => (typeof value === 'number' ? value.toLocaleString() : String(value))}
+      { sortable: false, width: '360px' }
+    ),
+    cassettes: column(
+      'cassettes',
+      (plasmid) => (
+        <CassetteCell
+          plasmidName={plasmid.name}
+          cassettes={cassettesByPlasmid.get(plasmid.id) ?? []}
+          options={cassetteChoices}
+          annotations={annotations}
+          onAdd={(content) => addCassette(plasmid.id, content)}
+          onReplace={replaceCassette}
+          onRemove={removeCassette}
         />
       ),
-    },
-    {
-      id: 'status',
-      label: 'Status',
-      sortable: true,
+      { width: '320px' }
+    ),
+    category: column('category', (p) => textCell(p, 'category'), { width: '120px' }),
+    bacterialResistance: column('bacterialResistance', (p) => textCell(p, 'bacterialResistance'), {
+      width: '120px',
+    }),
+    plantResistance: column('plantResistance', (p) => textCell(p, 'plantResistance'), {
+      width: '120px',
+    }),
+    prepConcentration: column(
+      'prepConcentration',
+      (p) => <DerivedCell value={latestPreps.get(p.id)?.concentrationNgUl} />,
+      { width: '150px' }
+    ),
+    comment: column('comment', (p) => textCell(p, 'comment'), { width: '200px' }),
+    sequencingResult: column('sequencingResult', (p) => textCell(p, 'sequencingResult'), {
+      width: '180px',
+    }),
+    sequencingDate: column('sequencingDate', (p) => textCell(p, 'sequencingDate', true), {
+      width: '140px',
+    }),
+    box: column('box', (p) => numberCell(p, 'box'), { width: '80px' }),
+    prepDate: column('prepDate', (p) => <DerivedCell value={latestPreps.get(p.id)?.preppedOn} />, {
       width: '130px',
-      render: (plasmid) => (
+    }),
+    stockId: column('stockId', (p) => <DerivedCell value={stocksByPlasmid.get(p.id)?.stockId} />, {
+      width: '140px',
+    }),
+    stockMadeOn: column(
+      'stockMadeOn',
+      (p) => <DerivedCell value={stocksByPlasmid.get(p.id)?.madeOn} />,
+      { width: '150px' }
+    ),
+    stockOrganism: column(
+      'stockOrganism',
+      (p) => <DerivedCell value={stocksByPlasmid.get(p.id)?.organism} />,
+      { width: '140px' }
+    ),
+    stockStrain: column(
+      'stockStrain',
+      (p) => <DerivedCell value={stocksByPlasmid.get(p.id)?.strain} />,
+      { width: '160px' }
+    ),
+    status: column(
+      'status',
+      (plasmid) => (
         <EditableCell
           value={plasmid.status}
           type="select"
@@ -479,31 +773,56 @@ export default function PlasmidsPage() {
           format={() => <PlasmidStatusBadge status={plasmid.status} />}
         />
       ),
-    },
-    {
-      id: 'createdAt',
-      label: 'Created',
-      sortable: true,
+      { width: '130px' }
+    ),
+    sizeBp: column(
+      'sizeBp',
+      (plasmid) => (
+        <EditableCell
+          value={plasmid.sizeBp ?? null}
+          type="number"
+          mono
+          colId="sizeBp"
+          onNavigate={handleCellNavigate}
+          ariaLabel={`Total size of ${plasmid.name} in base pairs`}
+          onCommit={(value: EditableCellValue) =>
+            saveField(plasmid.id, { sizeBp: value === null ? null : Number(value) })
+          }
+          format={(value) => (typeof value === 'number' ? value.toLocaleString() : String(value))}
+        />
+      ),
+      { width: '130px' }
+    ),
+    insertSizeBp: column('insertSizeBp', (p) => numberCell(p, 'insertSizeBp'), {
       width: '130px',
-      render: (plasmid) => new Date(plasmid.createdAt).toLocaleDateString(),
-    },
-    {
-      id: 'readiness',
-      label: 'Formblatt Z',
-      sortable: false,
-      width: '120px',
-      render: (plasmid) => (
+    }),
+    backboneVector: column('backboneVector', (p) => textCell(p, 'backboneVector'), {
+      width: '150px',
+    }),
+    notes: column('notes', (p) => textCell(p, 'notes'), { width: '200px' }),
+    createdAt: column('createdAt', (plasmid) => new Date(plasmid.createdAt).toLocaleDateString(), {
+      width: '130px',
+    }),
+    readiness: column(
+      'readiness',
+      (plasmid) => (
         <PlasmidReadinessCell readiness={readiness.get(plasmid.id)} plasmidName={plasmid.name} />
       ),
-    },
-  ];
+      { sortable: false, width: '120px' }
+    ),
+  };
+
+  const columns = visibleColumns.map((id) => columnDefs[id]);
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex">
+    // The page is viewport-high and never scrolls itself: the table scrolls
+    // inside its card with its header pinned, so the heading, search and the
+    // detail panel stay put however long the library is
+    <div className="h-[calc(100vh-var(--app-nav-height))] bg-gray-50 dark:bg-gray-900 flex">
       {/* Main content */}
-      <div className="flex-1 min-w-0 px-6 py-8">
+      <div className="flex-1 min-w-0 min-h-0 flex flex-col px-6 py-8">
         {/* Header */}
-        <div className="mb-8">
+        <div className="mb-8 shrink-0">
           <h1 className="text-3xl font-semibold tracking-tight text-gray-900 dark:text-gray-100 mb-2">
             Plasmids
           </h1>
@@ -513,7 +832,7 @@ export default function PlasmidsPage() {
         </div>
 
         {/* Controls */}
-        <Card className="mb-6">
+        <Card className="mb-6 shrink-0">
           <CardContent>
             <div className="flex gap-4 items-end">
               <Input
@@ -523,6 +842,7 @@ export default function PlasmidsPage() {
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="flex-1"
               />
+              <ColumnPicker visible={visibleColumns} onChange={changeVisibleColumns} />
               <Button intent="primary" onClick={handleCreate} loading={isCreating}>
                 New Plasmid
               </Button>
@@ -531,8 +851,8 @@ export default function PlasmidsPage() {
         </Card>
 
         {/* Table */}
-        <Card>
-          <CardHeader>
+        <Card className="flex-1 min-h-0 flex flex-col">
+          <CardHeader className="shrink-0">
             <CardTitle>
               Plasmid Library ({plasmids.length} total)
               {selectedRows.size > 0 && (
@@ -542,7 +862,7 @@ export default function PlasmidsPage() {
               )}
             </CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="flex-1 min-h-0 flex flex-col">
             {error && (
               <div
                 role="alert"
@@ -563,8 +883,14 @@ export default function PlasmidsPage() {
 
             {/* Grid shortcuts: arrows/Home/End navigate cells, Ctrl+C copies
                 the focused cell, pasting a TSV block fills rows/columns */}
-            <div onKeyDown={handleGridKeys} onPaste={(e) => void handleGridPaste(e)}>
+            <div
+              className="flex-1 min-h-0"
+              onKeyDown={handleGridKeys}
+              onPaste={(e) => void handleGridPaste(e)}
+            >
               <Table
+                className="h-full"
+                fixedLayout
                 columns={columns}
                 data={sortedPlasmids}
                 rowKey={(plasmid) => plasmid.id}
@@ -633,7 +959,10 @@ export default function PlasmidsPage() {
           plasmids={sortedPlasmids.filter((p) => selectedRows.has(p.id))}
           defaultInitials={operatorInitials}
           onClose={() => setIsPrepDialogOpen(false)}
-          onRecorded={(count) => setNotice(`Recorded ${count} prep${count === 1 ? '' : 's'}.`)}
+          onRecorded={(count) => {
+            setNotice(`Recorded ${count} prep${count === 1 ? '' : 's'}.`);
+            void refreshDerivedColumns();
+          }}
         />
       )}
 
@@ -646,8 +975,10 @@ export default function PlasmidsPage() {
           onClose={() => {
             setActiveId(null);
             // Cassettes, GMOs and the original vector are panel-edited and
-            // all feed readiness, so recompute when the panel closes
+            // all feed readiness, so recompute when the panel closes; the
+            // panel also records preps and stocks
             void refreshReadiness();
+            void refreshDerivedColumns();
           }}
         />
       )}
