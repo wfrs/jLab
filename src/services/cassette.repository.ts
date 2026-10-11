@@ -33,6 +33,24 @@ export class CassetteRepository extends Repository<Cassette> {
   }
 
   /**
+   * Every cassette in the library, grouped by plasmid and in position order.
+   * Feeds the plasmid table's Cassettes column and its reuse picker.
+   */
+  async listAll(): Promise<Cassette[]> {
+    this.logger.info('CassetteRepository.listAll');
+
+    try {
+      const results = await this.qb(this.table)
+        .orderBy('plasmidId', 'asc')
+        .orderBy('position', 'asc');
+      return (results as Cassette[]) || [];
+    } catch (error) {
+      this.logger.error('CassetteRepository.listAll failed', error as Error);
+      throw error;
+    }
+  }
+
+  /**
    * Highest position currently used on a plasmid, or null when it has no cassettes.
    * Used to append new cassettes at the end by default.
    */

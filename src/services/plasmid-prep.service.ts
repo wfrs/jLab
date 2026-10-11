@@ -71,6 +71,11 @@ export class PlasmidPrepService {
     return this.repository.latestForPlasmids(plasmidIds);
   }
 
+  /** The current tube of every plasmid that has been prepped */
+  async latestForAllPlasmids(): Promise<Map<string, PlasmidPrep>> {
+    return this.repository.latestForAll();
+  }
+
   /**
    * Record one prep per selected plasmid, sharing a date and operator.
    * All-or-nothing: an unknown plasmid or a bad concentration rolls the whole

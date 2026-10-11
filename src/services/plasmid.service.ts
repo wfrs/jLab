@@ -32,6 +32,18 @@ export interface UpdatePlasmidInput {
   parentId?: string | null;
   /** `null` clears the backbone vector */
   backboneVector?: string | null;
+  /** Lab spreadsheet fields (Plasmid type); `null` clears each */
+  constructName?: string | null;
+  insertName?: string | null;
+  insertSizeBp?: number | null;
+  category?: string | null;
+  bacterialResistance?: string | null;
+  plantResistance?: string | null;
+  box?: number | null;
+  sequencingResult?: string | null;
+  sequencingDate?: string | null;
+  comment?: string | null;
+  notes?: string | null;
 }
 
 export class PlasmidService {

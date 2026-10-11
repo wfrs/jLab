@@ -1,5 +1,6 @@
 /**
  * Glycerol stocks
+ * GET  /api/glycerol-stocks — every stock (the plasmid table's stock columns)
  * GET  /api/glycerol-stocks?plasmidIds=a,b,c — stocks belonging to those plasmids
  * POST /api/glycerol-stocks — record a new stock
  */
@@ -25,14 +26,25 @@ export async function GET(request: NextRequest) {
 
   try {
     const { searchParams } = new URL(request.url);
-    const plasmidIds = (searchParams.get('plasmidIds') ?? '')
-      .split(',')
-      .map((id) => id.trim())
-      .filter(Boolean);
+    const plasmidIdsParam = searchParams.get('plasmidIds');
+    // A filter that is present but empty selects nothing; only its absence
+    // means "everything", so a caller with an empty selection cannot fetch
+    // the whole freezer by accident.
+    const plasmidIds =
+      plasmidIdsParam === null
+        ? null
+        : plasmidIdsParam
+            .split(',')
+            .map((id) => id.trim())
+            .filter(Boolean);
 
-    logger.info('GET /api/glycerol-stocks', { correlationId, count: plasmidIds.length });
+    logger.info('GET /api/glycerol-stocks', {
+      correlationId,
+      count: plasmidIds === null ? 'all' : plasmidIds.length,
+    });
 
-    const stocks = await service.listForPlasmids(plasmidIds);
+    const stocks =
+      plasmidIds === null ? await service.listAll() : await service.listForPlasmids(plasmidIds);
 
     return NextResponse.json(createSuccessEnvelope({ stocks }, correlationId), { status: 200 });
   } catch (error) {

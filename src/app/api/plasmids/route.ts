@@ -16,10 +16,8 @@ import {
 } from '@/shared/api-envelope';
 import { createPlasmidSchema } from '@/shared/validation/plasmid-schemas';
 import { stripUndefined } from '@/shared/validation/strip-undefined';
+import { DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE } from '@/shared/pagination';
 import { randomUUID } from 'crypto';
-
-const DEFAULT_PAGE_SIZE = 50;
-const MAX_PAGE_SIZE = 100;
 
 const logger = new Logger();
 const plasmidService = new PlasmidService(logger);
@@ -69,7 +67,7 @@ export async function GET(request: NextRequest) {
         offset,
       };
     } else {
-      paginatedData = await plasmidService.listPlasmids(limit, offset);
+      paginatedData = { ...(await plasmidService.listPlasmids(limit, offset)), limit, offset };
     }
 
     return NextResponse.json(createSuccessEnvelope(paginatedData, correlationId), { status: 200 });

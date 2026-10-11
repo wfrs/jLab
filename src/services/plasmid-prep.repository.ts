@@ -54,22 +54,47 @@ export class PlasmidPrepRepository extends Repository<PlasmidPrep> {
     }
 
     try {
-      const rows = (await this.qb(this.table)
-        .whereIn('plasmidId', plasmidIds)
-        .orderBy('preppedOn', 'asc')
-        .orderBy('createdAt', 'asc')) as PlasmidPrep[];
-
-      // Ascending order means each later row overwrites the earlier one,
-      // leaving the newest prep per plasmid.
-      const latest = new Map<string, PlasmidPrep>();
-      for (const row of rows) {
-        latest.set(row.plasmidId, row);
-      }
-      return latest;
+      return this.foldLatest(
+        (await this.qb(this.table)
+          .whereIn('plasmidId', plasmidIds)
+          .orderBy('preppedOn', 'asc')
+          .orderBy('createdAt', 'asc')) as PlasmidPrep[]
+      );
     } catch (error) {
       this.logger.error('PlasmidPrepRepository.latestForPlasmids failed', error as Error);
       throw error;
     }
+  }
+
+  /**
+   * The current prep of every plasmid that has one, in one query. Feeds the
+   * concentration and prep-date columns of the plasmid table.
+   */
+  async latestForAll(): Promise<Map<string, PlasmidPrep>> {
+    this.logger.debug('PlasmidPrepRepository.latestForAll');
+
+    try {
+      return this.foldLatest(
+        (await this.qb(this.table)
+          .orderBy('preppedOn', 'asc')
+          .orderBy('createdAt', 'asc')) as PlasmidPrep[]
+      );
+    } catch (error) {
+      this.logger.error('PlasmidPrepRepository.latestForAll failed', error as Error);
+      throw error;
+    }
+  }
+
+  /**
+   * Rows arrive oldest first, so each later row overwrites the earlier one
+   * and the newest prep per plasmid remains.
+   */
+  private foldLatest(rowsOldestFirst: PlasmidPrep[]): Map<string, PlasmidPrep> {
+    const latest = new Map<string, PlasmidPrep>();
+    for (const row of rowsOldestFirst) {
+      latest.set(row.plasmidId, row);
+    }
+    return latest;
   }
 
   /** Insert many preps inside a caller-owned transaction */

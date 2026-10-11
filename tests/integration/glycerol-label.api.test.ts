@@ -282,6 +282,26 @@ describe('Glycerol stock labels', () => {
       expect(stocks.map((stock) => stock.stockId).sort()).toEqual(['AJM4', 'CJM1', 'CJM2']);
     });
 
+    it('lists the whole freezer when no plasmid filter is given', async () => {
+      const first = await addPlasmid('pJM0001', 'pMiso000');
+      await addStock('CJM1', { plasmidId: first });
+      await addStock('AJM4', { plasmidId: null, organism: 'A. tumefaciens', strain: 'GV3101' });
+
+      const stockIdsOf = async (url: string) => {
+        const response = await stocksRoute.GET(asNextRequest(new Request(url)));
+        expect(response.status).toBe(200);
+        const json = await response.json();
+        return (json.data.stocks as { stockId: string }[]).map((stock) => stock.stockId);
+      };
+
+      expect(await stockIdsOf('http://localhost/api/glycerol-stocks')).toEqual(['AJM4', 'CJM1']);
+      expect(await stockIdsOf(`http://localhost/api/glycerol-stocks?plasmidIds=${first}`)).toEqual([
+        'CJM1',
+      ]);
+      // An empty filter is still a filter: an empty selection fetches nothing
+      expect(await stockIdsOf('http://localhost/api/glycerol-stocks?plasmidIds=')).toEqual([]);
+    });
+
     it('creates a stock through the route', async () => {
       const plasmidId = await addPlasmid('pJM0005', 'pMiso301');
 

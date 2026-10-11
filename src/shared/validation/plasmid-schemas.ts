@@ -8,8 +8,34 @@ import { z } from 'zod';
 
 const PLASMID_NAME_MAX_LENGTH = 255;
 const DESCRIPTION_MAX_LENGTH = 10_000;
+const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
 const plasmidStatusSchema = z.enum(['draft', 'validated', 'archived']);
+
+/** Short free-text lab fields; `null` clears the stored value */
+const shortTextField = z.string().trim().max(PLASMID_NAME_MAX_LENGTH).nullable();
+const longTextField = z.string().max(DESCRIPTION_MAX_LENGTH).nullable();
+
+/**
+ * Lab spreadsheet fields (docs/plans/label-printing.md §0.2). Imported by the
+ * spreadsheet importer and edited inline in the plasmid table.
+ */
+const labFieldsSchema = {
+  constructName: shortTextField,
+  insertName: shortTextField,
+  insertSizeBp: z.number().int().positive('Insert size must be greater than 0').nullable(),
+  category: shortTextField,
+  bacterialResistance: shortTextField,
+  plantResistance: shortTextField,
+  box: z.number().int().nonnegative('Box must be a whole number').nullable(),
+  sequencingResult: shortTextField,
+  sequencingDate: z
+    .string()
+    .regex(ISO_DATE_PATTERN, 'Sequencing date must be an ISO date (YYYY-MM-DD)')
+    .nullable(),
+  comment: longTextField,
+  notes: longTextField,
+};
 
 /**
  * POST /api/plasmids request body
@@ -39,6 +65,7 @@ export const updatePlasmidSchema = z
     parentId: z.string().min(1).nullable(),
     backboneVector: z.string().max(PLASMID_NAME_MAX_LENGTH).nullable(),
     status: plasmidStatusSchema,
+    ...labFieldsSchema,
   })
   .partial()
   .strict()

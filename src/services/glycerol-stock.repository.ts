@@ -44,6 +44,19 @@ export class GlycerolStockRepository extends Repository<GlycerolStock> {
     }
   }
 
+  /** Every stock in the freezer, for the plasmid table's stock columns */
+  async listAll(): Promise<GlycerolStock[]> {
+    this.logger.debug('GlycerolStockRepository.listAll');
+
+    try {
+      const results = await this.qb(this.table).orderBy('stockId');
+      return (results as GlycerolStock[]) || [];
+    } catch (error) {
+      this.logger.error('GlycerolStockRepository.listAll failed', error as Error);
+      throw error;
+    }
+  }
+
   /** Every stock belonging to any of these plasmids, in one query */
   async listByPlasmids(plasmidIds: string[]): Promise<GlycerolStock[]> {
     if (plasmidIds.length === 0) {

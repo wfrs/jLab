@@ -59,6 +59,10 @@ export class GlycerolStockService {
     return this.repository.listByPlasmids(plasmidIds);
   }
 
+  async listAll(): Promise<GlycerolStock[]> {
+    return this.repository.listAll();
+  }
+
   async create(input: CreateGlycerolStockInput): Promise<GlycerolStock> {
     this.logger.info('GlycerolStockService.create', { stockId: input.stockId });
 

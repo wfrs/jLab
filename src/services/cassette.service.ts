@@ -196,6 +196,20 @@ export class CassetteService {
     }
   }
 
+  /** Every cassette in the library, by plasmid then position */
+  async listAllCassettes(): Promise<Cassette[]> {
+    this.logger.info('CassetteService.listAllCassettes');
+
+    try {
+      return await this.repository.listAll();
+    } catch (error) {
+      this.logger.error('CassetteService.listAllCassettes failed', error as Error);
+      throw new DomainError('DATABASE', 'Failed to list cassettes', {
+        cause: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
   /**
    * List cassettes on a plasmid (ordered by position)
    */

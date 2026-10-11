@@ -1,5 +1,7 @@
 /**
  * Plasmid prep batches
+ * GET  /api/plasmids/preps — the current (newest) prep of every plasmid that
+ * has one, for the plasmid table's concentration and prep-date columns.
  * POST /api/plasmids/preps — record one prep per plasmid, sharing a date and
  * operator.
  *
@@ -22,6 +24,23 @@ import { randomUUID } from 'crypto';
 
 const logger = new Logger();
 const prepService = new PlasmidPrepService(logger);
+
+export async function GET(request: NextRequest) {
+  const correlationId = request.headers.get('x-correlation-id') || randomUUID();
+
+  try {
+    logger.info('GET /api/plasmids/preps', { correlationId });
+
+    const latest = await prepService.latestForAllPlasmids();
+    const preps = Array.from(latest.values());
+
+    return NextResponse.json(createSuccessEnvelope({ preps }, correlationId), { status: 200 });
+  } catch (error) {
+    logger.error('GET /api/plasmids/preps failed', error as Error, { correlationId });
+    const envelope = createErrorEnvelope(error, correlationId);
+    return NextResponse.json(envelope, { status: statusForErrorEnvelope(envelope) });
+  }
+}
 
 export async function POST(request: NextRequest) {
   const correlationId = request.headers.get('x-correlation-id') || randomUUID();

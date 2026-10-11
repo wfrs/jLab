@@ -179,6 +179,48 @@ describe('Label API', () => {
     });
   });
 
+  describe('GET /api/plasmids/preps', () => {
+    it('returns the newest prep of every prepped plasmid', async () => {
+      const remade = await addPlasmid('pJM0001');
+      const once = await addPlasmid('pJM0002');
+      await addPlasmid('pJM0003');
+      await addPrep(remade, '2024-01-10', 80);
+      await addPrep(remade, '2024-06-20', 210);
+      await addPrep(once, '2024-03-05', null);
+
+      const response = await prepsRoute.GET(
+        asNextRequest(new Request('http://localhost/api/plasmids/preps'))
+      );
+      expect(response.status).toBe(200);
+
+      const json = await response.json();
+      const byPlasmid = new Map(
+        (
+          json.data.preps as { plasmidId: string; preppedOn: string; concentrationNgUl: number }[]
+        ).map((prep) => [prep.plasmidId, prep])
+      );
+      expect(byPlasmid.size).toBe(2);
+      expect(byPlasmid.get(remade)).toMatchObject({
+        preppedOn: '2024-06-20',
+        concentrationNgUl: 210,
+      });
+      expect(byPlasmid.get(once)).toMatchObject({
+        preppedOn: '2024-03-05',
+        concentrationNgUl: null,
+      });
+    });
+
+    it('returns an empty list when nothing has been prepped', async () => {
+      await addPlasmid('pJM0001');
+
+      const response = await prepsRoute.GET(
+        asNextRequest(new Request('http://localhost/api/plasmids/preps'))
+      );
+
+      expect((await response.json()).data.preps).toEqual([]);
+    });
+  });
+
   describe('GET /api/labels/plasmids', () => {
     it('returns the labels in an envelope', async () => {
       const id = await addPlasmid('pJM0001', 'pMiso000');

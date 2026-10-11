@@ -9,9 +9,11 @@ import { createTestDb, createTestSchema, cleanTestDb } from '../helpers/test-db'
 
 type ListRoutes = typeof import('@app/api/plasmids/[id]/cassettes/route');
 type ItemRoutes = typeof import('@app/api/cassettes/[id]/route');
+type AllRoutes = typeof import('@app/api/cassettes/route');
 
 let listRoutes: ListRoutes;
 let itemRoutes: ItemRoutes;
+let allRoutes: AllRoutes;
 let db: Knex;
 
 const PLASMID_ID = 'plasmid-1';
@@ -47,6 +49,7 @@ describe('Cassette API routes (Integration)', () => {
 
     listRoutes = await import('@app/api/plasmids/[id]/cassettes/route');
     itemRoutes = await import('@app/api/cassettes/[id]/route');
+    allRoutes = await import('@app/api/cassettes/route');
   });
 
   afterAll(async () => {
@@ -63,6 +66,55 @@ describe('Cassette API routes (Integration)', () => {
       status: 'draft',
       createdAt: now,
       updatedAt: now,
+    });
+  });
+
+  describe('GET /api/cassettes', () => {
+    it('lists every cassette in the library by plasmid then position', async () => {
+      const now = new Date().toISOString();
+      await db('plasmids').insert({
+        id: 'plasmid-0',
+        name: 'pOther',
+        status: 'draft',
+        createdAt: now,
+        updatedAt: now,
+      });
+      await createViaApi({ name: 'Pt7-EGFP-Tt7', type: 'other' });
+      await createViaApi({ name: 'Pt7-RFP-Tt7', type: 'other' });
+      await listRoutes.POST(
+        asNextRequest(
+          jsonRequest('http://localhost/api/plasmids/plasmid-0/cassettes', 'POST', {
+            name: 'Pt7-EGFP-Tt7',
+            type: 'other',
+          })
+        ),
+        { params: { id: 'plasmid-0' } }
+      );
+
+      const response = await allRoutes.GET(
+        asNextRequest(jsonRequest('http://localhost/api/cassettes', 'GET'))
+      );
+      expect(response.status).toBe(200);
+
+      const json = await response.json();
+      expect(
+        json.data.map((c: { plasmidId: string; name: string; position: number }) => [
+          c.plasmidId,
+          c.name,
+          c.position,
+        ])
+      ).toEqual([
+        ['plasmid-0', 'Pt7-EGFP-Tt7', 0],
+        [PLASMID_ID, 'Pt7-EGFP-Tt7', 0],
+        [PLASMID_ID, 'Pt7-RFP-Tt7', 1],
+      ]);
+    });
+
+    it('returns an empty list for an empty library', async () => {
+      const response = await allRoutes.GET(
+        asNextRequest(jsonRequest('http://localhost/api/cassettes', 'GET'))
+      );
+      expect((await response.json()).data).toEqual([]);
     });
   });
 

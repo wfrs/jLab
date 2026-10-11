@@ -7,6 +7,7 @@
 import { Knex } from 'knex';
 import { setQueryBuilder } from '@infrastructure/query-builder';
 import { createTestDb, createTestSchema, cleanTestDb } from '../helpers/test-db';
+import { MAX_PAGE_SIZE } from '@/shared/pagination';
 
 // Route modules instantiate PlasmidService (and thus the query builder) at
 // import time, so the test query builder must be registered before importing.
@@ -133,6 +134,34 @@ describe('Plasmid API routes (Integration)', () => {
       expect(json.data.data.map((p: { name: string }) => p.name)).toEqual(['pAAA', 'pBBB']);
     });
 
+    it('caps the page size at MAX_PAGE_SIZE and honours the offset', async () => {
+      const names = Array.from(
+        { length: MAX_PAGE_SIZE + 2 },
+        (_, i) => `p${String(i).padStart(4, '0')}`
+      );
+      for (const name of names) {
+        await createViaApi({ name });
+      }
+
+      const firstPage = await (
+        await listRoutes.GET(asNextRequest(jsonRequest(`${BASE_URL}?limit=1000`, 'GET')))
+      ).json();
+      expect(firstPage.data.total).toBe(names.length);
+      expect(firstPage.data.limit).toBe(MAX_PAGE_SIZE);
+      expect(firstPage.data.data).toHaveLength(MAX_PAGE_SIZE);
+
+      const secondPage = await (
+        await listRoutes.GET(
+          asNextRequest(
+            jsonRequest(`${BASE_URL}?limit=${MAX_PAGE_SIZE}&offset=${MAX_PAGE_SIZE}`, 'GET')
+          )
+        )
+      ).json();
+      expect(secondPage.data.data.map((p: { name: string }) => p.name)).toEqual(
+        names.slice(MAX_PAGE_SIZE)
+      );
+    });
+
     it('filters by search query', async () => {
       await createViaApi({ name: 'pGFP', description: 'fluorescent' });
       await createViaApi({ name: 'pRFP', description: 'red protein' });
@@ -225,6 +254,55 @@ describe('Plasmid API routes (Integration)', () => {
         { params: { id } }
       );
       expect(response.status).toBe(200);
+    });
+
+    it('updates and clears the lab spreadsheet fields', async () => {
+      const created = await (await createViaApi({ name: 'pLab' })).json();
+      const id = created.data.id;
+      const labFields = {
+        constructName: 'pMiso000',
+        insertName: 'GFP',
+        insertSizeBp: 720,
+        category: 'CDS',
+        bacterialResistance: 'Kan',
+        plantResistance: 'Hyg',
+        box: 3,
+        sequencingResult: 'good; ONT',
+        sequencingDate: '2025-03-25',
+        comment: 'cloned by LN',
+        notes: 'other comment',
+      };
+
+      const updated = await (
+        await itemRoutes.PATCH(
+          asNextRequest(jsonRequest(`${BASE_URL}/${id}`, 'PATCH', labFields)),
+          { params: { id } }
+        )
+      ).json();
+      expect(updated.data).toMatchObject(labFields);
+
+      const cleared = await (
+        await itemRoutes.PATCH(
+          asNextRequest(
+            jsonRequest(`${BASE_URL}/${id}`, 'PATCH', { box: null, sequencingDate: null })
+          ),
+          { params: { id } }
+        )
+      ).json();
+      expect(cleared.data.box).toBeNull();
+      expect(cleared.data.sequencingDate).toBeNull();
+      expect(cleared.data.constructName).toBe('pMiso000');
+    });
+
+    it('rejects a sequencing date that is not ISO formatted', async () => {
+      const created = await (await createViaApi({ name: 'pDate' })).json();
+      const id = created.data.id;
+
+      const response = await itemRoutes.PATCH(
+        asNextRequest(jsonRequest(`${BASE_URL}/${id}`, 'PATCH', { sequencingDate: '25.03.2025' })),
+        { params: { id } }
+      );
+      expect(response.status).toBe(400);
     });
 
     it('returns 400 for an empty update body', async () => {
