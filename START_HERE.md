@@ -195,7 +195,7 @@ npm run lint                  # ESLint + Prettier check
 npm run lint:fix              # Auto-fix issues
 
 # Database
-npm run db:init               # Initialize schema
+npm run db:init               # Initialize schema (optional: created on first use)
 npm run db:seed               # Load sample data
 
 # Build
@@ -249,8 +249,7 @@ Before starting work:
 - [ ] Ran `npm install` (dependencies installed)
 - [ ] Ran `npm run type-check` (0 TypeScript errors)
 - [ ] Ran `npm run test` (7 tests passing)
-- [ ] Ran `npm run db:init` (database working)
-- [ ] Ran `npm run dev` (dev server starts)
+- [ ] Ran `npm run dev` and opened http://localhost:3000 (schema is created on first use)
 - [ ] Ready to implement!
 
 ---

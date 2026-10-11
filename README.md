@@ -25,7 +25,7 @@ npm run test
 # Run linting and formatting
 npm run lint
 
-# Initialize database
+# Initialize database (optional: the dev server creates the schema on first use)
 npm run db:init
 
 # Seed sample data
